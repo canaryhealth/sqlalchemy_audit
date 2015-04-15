@@ -57,22 +57,22 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         assert sc.version == 2
 
-        SomeClassHistory = SomeClass.__history_mapper__.class_
+        SomeClassAudit = SomeClass.__audit_mapper__.class_
 
         eq_(
-            sess.query(SomeClassHistory).filter(
-                SomeClassHistory.version == 1).all(),
-            [SomeClassHistory(version=1, name='sc1')]
+            sess.query(SomeClassAudit).filter(
+                SomeClassAudit.version == 1).all(),
+            [SomeClassAudit(version=1, name='sc1')]
         )
 
         sc.name = 'sc1modified2'
 
         eq_(
-            sess.query(SomeClassHistory).order_by(
-                SomeClassHistory.version).all(),
+            sess.query(SomeClassAudit).order_by(
+                SomeClassAudit.version).all(),
             [
-                SomeClassHistory(version=1, name='sc1'),
-                SomeClassHistory(version=2, name='sc1modified')
+                SomeClassAudit(version=1, name='sc1'),
+                SomeClassAudit(version=2, name='sc1modified')
             ]
         )
 
@@ -86,11 +86,11 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sess.commit()
 
         eq_(
-            sess.query(SomeClassHistory).order_by(
-                SomeClassHistory.version).all(),
+            sess.query(SomeClassAudit).order_by(
+                SomeClassAudit.version).all(),
             [
-                SomeClassHistory(version=1, name='sc1'),
-                SomeClassHistory(version=2, name='sc1modified')
+                SomeClassAudit(version=1, name='sc1'),
+                SomeClassAudit(version=2, name='sc1modified')
             ]
         )
 
@@ -98,12 +98,12 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sess.commit()
 
         eq_(
-            sess.query(SomeClassHistory).order_by(
-                SomeClassHistory.version).all(),
+            sess.query(SomeClassAudit).order_by(
+                SomeClassAudit.version).all(),
             [
-                SomeClassHistory(version=1, name='sc1'),
-                SomeClassHistory(version=2, name='sc1modified'),
-                SomeClassHistory(version=3, name='sc1modified2')
+                SomeClassAudit(version=1, name='sc1'),
+                SomeClassAudit(version=2, name='sc1modified'),
+                SomeClassAudit(version=3, name='sc1modified2')
             ]
         )
 
@@ -173,11 +173,11 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sc.boole = False
         sess.commit()
 
-        SomeClassHistory = SomeClass.__history_mapper__.class_
+        SomeClassAudit = SomeClass.__audit_mapper__.class_
 
         eq_(
-            sess.query(SomeClassHistory.boole).order_by(
-                SomeClassHistory.id).all(),
+            sess.query(SomeClassAudit.boole).order_by(
+                SomeClassAudit.id).all(),
             [(True, ), (None, )]
         )
 
@@ -208,12 +208,12 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         assert sc.version == 2
 
-        SomeClassHistory = SomeClass.__history_mapper__.class_
+        SomeClassAudit = SomeClass.__audit_mapper__.class_
 
         eq_(
-            sess.query(SomeClassHistory).filter(
-                SomeClassHistory.version == 1).all(),
-            [SomeClassHistory(version=1, name='sc1', data='somedata')]
+            sess.query(SomeClassAudit).filter(
+                SomeClassAudit.version == 1).all(),
+            [SomeClassAudit(version=1, name='sc1', data='somedata')]
         )
 
     def test_joined_inheritance(self):
@@ -263,17 +263,17 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sep1.name = 'sep1mod'
         sess.commit()
 
-        BaseClassHistory = BaseClass.__history_mapper__.class_
-        SubClassSeparatePkHistory = \
-            SubClassSeparatePk.__history_mapper__.class_
-        SubClassSamePkHistory = SubClassSamePk.__history_mapper__.class_
+        BaseClassAudit = BaseClass.__audit_mapper__.class_
+        SubClassSeparatePkAudit = \
+            SubClassSeparatePk.__audit_mapper__.class_
+        SubClassSamePkAudit = SubClassSamePk.__audit_mapper__.class_
         eq_(
-            sess.query(BaseClassHistory).order_by(BaseClassHistory.id).all(),
+            sess.query(BaseClassAudit).order_by(BaseClassAudit.id).all(),
             [
-                SubClassSeparatePkHistory(
+                SubClassSeparatePkAudit(
                     id=1, name='sep1', type='sep', version=1),
-                BaseClassHistory(id=2, name='base1', type='base', version=1),
-                SubClassSamePkHistory(
+                BaseClassAudit(id=2, name='base1', type='base', version=1),
+                SubClassSamePkAudit(
                     id=3, name='same1', type='same', version=1)
             ]
         )
@@ -281,32 +281,32 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         same1.subdata2 = 'same1subdatamod2'
 
         eq_(
-            sess.query(BaseClassHistory).order_by(
-                BaseClassHistory.id, BaseClassHistory.version).all(),
+            sess.query(BaseClassAudit).order_by(
+                BaseClassAudit.id, BaseClassAudit.version).all(),
             [
-                SubClassSeparatePkHistory(
+                SubClassSeparatePkAudit(
                     id=1, name='sep1', type='sep', version=1),
-                BaseClassHistory(id=2, name='base1', type='base', version=1),
-                SubClassSamePkHistory(
+                BaseClassAudit(id=2, name='base1', type='base', version=1),
+                SubClassSamePkAudit(
                     id=3, name='same1', type='same', version=1),
-                SubClassSamePkHistory(
+                SubClassSamePkAudit(
                     id=3, name='same1', type='same', version=2)
             ]
         )
 
         base1.name = 'base1mod2'
         eq_(
-            sess.query(BaseClassHistory).order_by(
-                BaseClassHistory.id, BaseClassHistory.version).all(),
+            sess.query(BaseClassAudit).order_by(
+                BaseClassAudit.id, BaseClassAudit.version).all(),
             [
-                SubClassSeparatePkHistory(
+                SubClassSeparatePkAudit(
                     id=1, name='sep1', type='sep', version=1),
-                BaseClassHistory(id=2, name='base1', type='base', version=1),
-                BaseClassHistory(
+                BaseClassAudit(id=2, name='base1', type='base', version=1),
+                BaseClassAudit(
                     id=2, name='base1mod', type='base', version=2),
-                SubClassSamePkHistory(
+                SubClassSamePkAudit(
                     id=3, name='same1', type='same', version=1),
-                SubClassSamePkHistory(
+                SubClassSamePkAudit(
                     id=3, name='same1', type='same', version=2)
             ]
         )
@@ -345,57 +345,57 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         self.create_tables()
 
-        SubSubHistory = SubSubClass.__history_mapper__.class_
+        SubSubAudit = SubSubClass.__audit_mapper__.class_
         sess = self.session
-        q = sess.query(SubSubHistory)
+        q = sess.query(SubSubAudit)
         self.assert_compile(
             q,
 
 
             "SELECT "
 
-            "subsubtable_history.id AS subsubtable_history_id, "
-            "subtable_history.id AS subtable_history_id, "
-            "basetable_history.id AS basetable_history_id, "
+            "subsubtable_audit.id AS subsubtable_audit_id, "
+            "subtable_audit.id AS subtable_audit_id, "
+            "basetable_audit.id AS basetable_audit_id, "
 
-            "subsubtable_history.changed AS subsubtable_history_changed, "
-            "subtable_history.changed AS subtable_history_changed, "
-            "basetable_history.changed AS basetable_history_changed, "
+            "subsubtable_audit.changed AS subsubtable_audit_changed, "
+            "subtable_audit.changed AS subtable_audit_changed, "
+            "basetable_audit.changed AS basetable_audit_changed, "
 
-            "basetable_history.name AS basetable_history_name, "
+            "basetable_audit.name AS basetable_audit_name, "
 
-            "basetable_history.type AS basetable_history_type, "
+            "basetable_audit.type AS basetable_audit_type, "
 
-            "subsubtable_history.version AS subsubtable_history_version, "
-            "subtable_history.version AS subtable_history_version, "
-            "basetable_history.version AS basetable_history_version, "
+            "subsubtable_audit.version AS subsubtable_audit_version, "
+            "subtable_audit.version AS subtable_audit_version, "
+            "basetable_audit.version AS basetable_audit_version, "
 
 
-            "subtable_history.base_id AS subtable_history_base_id, "
-            "subtable_history.subdata1 AS subtable_history_subdata1, "
-            "subsubtable_history.subdata2 AS subsubtable_history_subdata2 "
-            "FROM basetable_history "
-            "JOIN subtable_history "
-            "ON basetable_history.id = subtable_history.base_id "
-            "AND basetable_history.version = subtable_history.version "
-            "JOIN subsubtable_history ON subtable_history.id = "
-            "subsubtable_history.id AND subtable_history.version = "
-            "subsubtable_history.version"
+            "subtable_audit.base_id AS subtable_audit_base_id, "
+            "subtable_audit.subdata1 AS subtable_audit_subdata1, "
+            "subsubtable_audit.subdata2 AS subsubtable_audit_subdata2 "
+            "FROM basetable_audit "
+            "JOIN subtable_audit "
+            "ON basetable_audit.id = subtable_audit.base_id "
+            "AND basetable_audit.version = subtable_audit.version "
+            "JOIN subsubtable_audit ON subtable_audit.id = "
+            "subsubtable_audit.id AND subtable_audit.version = "
+            "subsubtable_audit.version"
         )
 
         ssc = SubSubClass(name='ss1', subdata1='sd1', subdata2='sd2')
         sess.add(ssc)
         sess.commit()
         eq_(
-            sess.query(SubSubHistory).all(),
+            sess.query(SubSubAudit).all(),
             []
         )
         ssc.subdata1 = 'sd11'
         ssc.subdata2 = 'sd22'
         sess.commit()
         eq_(
-            sess.query(SubSubHistory).all(),
-            [SubSubHistory(name='ss1', subdata1='sd1',
+            sess.query(SubSubAudit).all(),
+            [SubSubAudit(name='ss1', subdata1='sd1',
                                 subdata2='sd2', type='subsub', version=1)]
         )
         eq_(ssc, SubSubClass(
@@ -424,8 +424,8 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         self.create_tables()
 
-        BaseClassHistory = BaseClass.__history_mapper__.class_
-        SubClassHistory = SubClass.__history_mapper__.class_
+        BaseClassAudit = BaseClass.__audit_mapper__.class_
+        SubClassAudit = SubClass.__audit_mapper__.class_
         sess = self.session
         s1 = SubClass(name='s1')
         sess.add(s1)
@@ -435,14 +435,14 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sess.commit()
 
         actual_changed_base = sess.scalar(
-            select([BaseClass.__history_mapper__.local_table.c.changed]))
+            select([BaseClass.__audit_mapper__.local_table.c.changed]))
         actual_changed_sub = sess.scalar(
-            select([SubClass.__history_mapper__.local_table.c.changed]))
-        h1 = sess.query(BaseClassHistory).first()
+            select([SubClass.__audit_mapper__.local_table.c.changed]))
+        h1 = sess.query(BaseClassAudit).first()
         eq_(h1.changed, actual_changed_base)
         eq_(h1.changed, actual_changed_sub)
 
-        h1 = sess.query(SubClassHistory).first()
+        h1 = sess.query(SubClassAudit).first()
         eq_(h1.changed, actual_changed_base)
         eq_(h1.changed, actual_changed_sub)
 
@@ -474,26 +474,26 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         b1.name = 'b1modified'
 
-        BaseClassHistory = BaseClass.__history_mapper__.class_
-        SubClassHistory = SubClass.__history_mapper__.class_
+        BaseClassAudit = BaseClass.__audit_mapper__.class_
+        SubClassAudit = SubClass.__audit_mapper__.class_
 
         eq_(
-            sess.query(BaseClassHistory).order_by(
-                BaseClassHistory.id, BaseClassHistory.version).all(),
-            [BaseClassHistory(id=1, name='b1', type='base', version=1)]
+            sess.query(BaseClassAudit).order_by(
+                BaseClassAudit.id, BaseClassAudit.version).all(),
+            [BaseClassAudit(id=1, name='b1', type='base', version=1)]
         )
 
         sc.name = 's1modified'
         b1.name = 'b1modified2'
 
         eq_(
-            sess.query(BaseClassHistory).order_by(
-                BaseClassHistory.id, BaseClassHistory.version).all(),
+            sess.query(BaseClassAudit).order_by(
+                BaseClassAudit.id, BaseClassAudit.version).all(),
             [
-                BaseClassHistory(id=1, name='b1', type='base', version=1),
-                BaseClassHistory(
+                BaseClassAudit(id=1, name='b1', type='base', version=1),
+                BaseClassAudit(
                     id=1, name='b1modified', type='base', version=2),
-                SubClassHistory(id=2, name='s1', type='sub', version=1)
+                SubClassAudit(id=2, name='s1', type='sub', version=1)
             ]
         )
 
@@ -541,7 +541,7 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
             related_id = Column(Integer, ForeignKey('somerelated.id'))
             related = relationship("SomeRelated", backref='classes')
 
-        SomeClassHistory = SomeClass.__history_mapper__.class_
+        SomeClassAudit = SomeClass.__audit_mapper__.class_
 
         self.create_tables()
         sess = self.session
@@ -558,19 +558,19 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         assert sc.version == 2
 
         eq_(
-            sess.query(SomeClassHistory).filter(
-                SomeClassHistory.version == 1).all(),
-            [SomeClassHistory(version=1, name='sc1', related_id=None)]
+            sess.query(SomeClassAudit).filter(
+                SomeClassAudit.version == 1).all(),
+            [SomeClassAudit(version=1, name='sc1', related_id=None)]
         )
 
         sc.related = None
 
         eq_(
-            sess.query(SomeClassHistory).order_by(
-                SomeClassHistory.version).all(),
+            sess.query(SomeClassAudit).order_by(
+                SomeClassAudit.version).all(),
             [
-                SomeClassHistory(version=1, name='sc1', related_id=None),
-                SomeClassHistory(version=2, name='sc1', related_id=sr1.id)
+                SomeClassAudit(version=1, name='sc1', related_id=None),
+                SomeClassAudit(version=2, name='sc1', related_id=sr1.id)
             ]
         )
 

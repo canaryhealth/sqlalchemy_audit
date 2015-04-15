@@ -20,7 +20,7 @@ def _is_versioning_col(col):
     return "version_meta" in col.info
 
 
-def _history_mapper(local_mapper):
+def _audit_mapper(local_mapper):
     cls = local_mapper.class_
 
     # set the "active_history" flag
@@ -30,7 +30,7 @@ def _history_mapper(local_mapper):
         getattr(local_mapper.class_, prop.key).impl.active_history = True
 
     super_mapper = local_mapper.inherits
-    super_history_mapper = getattr(cls, '__history_mapper__', None)
+    super_audit_mapper = getattr(cls, '__audit_mapper__', None)
 
     polymorphic_on = None
     super_fks = []
@@ -38,7 +38,7 @@ def _history_mapper(local_mapper):
     def _col_copy(col):
         orig = col
         col = col.copy()
-        orig.info['history_copy'] = col
+        orig.info['audit_copy'] = col
         col.unique = False
         col.default = col.server_default = None
         return col
@@ -61,7 +61,7 @@ def _history_mapper(local_mapper):
                 super_fks.append(
                     (
                         col.key,
-                        list(super_history_mapper.local_table.primary_key)[0]
+                        list(super_audit_mapper.local_table.primary_key)[0]
                     )
                 )
 
@@ -75,12 +75,12 @@ def _history_mapper(local_mapper):
             if len(orig_prop.columns) > 1 or \
                     orig_prop.columns[0].key != orig_prop.key:
                 properties[orig_prop.key] = tuple(
-                    col.info['history_copy'] for col in orig_prop.columns)
+                    col.info['audit_copy'] for col in orig_prop.columns)
 
         if super_mapper:
             super_fks.append(
                 (
-                    'version', super_history_mapper.local_table.c.version
+                    'version', super_audit_mapper.local_table.c.version
                 )
             )
 
@@ -92,7 +92,7 @@ def _history_mapper(local_mapper):
                 autoincrement=False, info=version_meta))
 
         # "changed" column stores the UTC timestamp of when the
-        # history row was created.
+        # audit row was created.
         # This column is optional and can be omitted.
         cols.append(Column(
             'changed', DateTime,
@@ -103,44 +103,44 @@ def _history_mapper(local_mapper):
             cols.append(ForeignKeyConstraint(*zip(*super_fks)))
 
         table = Table(
-            local_mapper.local_table.name + '_history',
+            local_mapper.local_table.name + '_audit',
             local_mapper.local_table.metadata,
             *cols,
             schema=local_mapper.local_table.schema
         )
     else:
         # single table inheritance.  take any additional columns that may have
-        # been added and add them to the history table.
+        # been added and add them to the audit table.
         for column in local_mapper.local_table.c:
-            if column.key not in super_history_mapper.local_table.c:
+            if column.key not in super_audit_mapper.local_table.c:
                 col = _col_copy(column)
-                super_history_mapper.local_table.append_column(col)
+                super_audit_mapper.local_table.append_column(col)
         table = None
 
-    if super_history_mapper:
-        bases = (super_history_mapper.class_,)
+    if super_audit_mapper:
+        bases = (super_audit_mapper.class_,)
 
         if table is not None:
             properties['changed'] = (
                 (table.c.changed, ) +
-                tuple(super_history_mapper.attrs.changed.columns)
+                tuple(super_audit_mapper.attrs.changed.columns)
             )
 
     else:
         bases = local_mapper.base_mapper.class_.__bases__
-    versioned_cls = type.__new__(type, "%sHistory" % cls.__name__, bases, {})
+    versioned_cls = type.__new__(type, "%sAudit" % cls.__name__, bases, {})
 
     m = mapper(
         versioned_cls,
         table,
-        inherits=super_history_mapper,
+        inherits=super_audit_mapper,
         polymorphic_on=polymorphic_on,
         polymorphic_identity=local_mapper.polymorphic_identity,
         properties=properties
     )
-    cls.__history_mapper__ = m
+    cls.__audit_mapper__ = m
 
-    if not super_history_mapper:
+    if not super_audit_mapper:
         local_mapper.local_table.append_column(
             Column('version', Integer, default=1, nullable=False)
         )
@@ -153,21 +153,21 @@ class Versioned(object):
     def __mapper_cls__(cls):
         def map(cls, *arg, **kw):
             mp = mapper(cls, *arg, **kw)
-            _history_mapper(mp)
+            _audit_mapper(mp)
             return mp
         return map
 
 
 def versioned_objects(iter):
     for obj in iter:
-        if hasattr(obj, '__history_mapper__'):
+        if hasattr(obj, '__audit_mapper__'):
             yield obj
 
 
 def create_version(obj, session, deleted=False):
     obj_mapper = object_mapper(obj)
-    history_mapper = obj.__history_mapper__
-    history_cls = history_mapper.class_
+    audit_mapper = obj.__audit_mapper__
+    audit_cls = audit_mapper.class_
 
     obj_state = attributes.instance_state(obj)
 
@@ -177,7 +177,7 @@ def create_version(obj, session, deleted=False):
 
     for om, hm in zip(
             obj_mapper.iterate_to_root(),
-            history_mapper.iterate_to_root()
+            audit_mapper.iterate_to_root()
     ):
         if hm.single:
             continue
@@ -238,7 +238,7 @@ def create_version(obj, session, deleted=False):
         return
 
     attr['version'] = obj.version
-    hist = history_cls()
+    hist = audit_cls()
     for key, value in attr.items():
         setattr(hist, key, value)
     session.add(hist)
