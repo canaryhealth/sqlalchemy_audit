@@ -1,17 +1,19 @@
 """Unit tests illustrating usage of the ``history_meta.py``
 module functions."""
+import unittest
+import warnings
 
-from unittest import TestCase
-from sqlalchemy.ext.declarative import declarative_base
-from ..history_meta import Versioned, versioned_session
 from sqlalchemy import create_engine, Column, Integer, String, \
     ForeignKey, Boolean, select
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import clear_mappers, Session, deferred, relationship, \
     column_property
+from sqlalchemy.orm import exc as orm_exc
 from sqlalchemy.testing import AssertsCompiledSQL, eq_, assert_raises
 from sqlalchemy.testing.entities import ComparableEntity
-from sqlalchemy.orm import exc as orm_exc
-import warnings
+
+from ..history_meta import Auditable, auditable_session
+
 
 warnings.simplefilter("error")
 
@@ -23,13 +25,13 @@ def setup_module():
     engine = create_engine('sqlite://', echo=True)
 
 
-class TestVersioning(TestCase, AssertsCompiledSQL):
+class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
     __dialect__ = 'default'
 
     def setUp(self):
         self.session = Session(engine)
         self.Base = declarative_base()
-        versioned_session(self.session)
+        auditable_session(self.session)
 
     def tearDown(self):
         self.session.close()
@@ -40,7 +42,7 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         self.Base.metadata.create_all(engine)
 
     def test_plain(self):
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
@@ -55,28 +57,28 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sc.name = 'sc1modified'
         sess.commit()
 
-        assert sc.version == 2
+        assert sc.audit_rec_id == 2
 
         SomeClassAudit = SomeClass.__audit_mapper__.class_
 
         eq_(
             sess.query(SomeClassAudit).filter(
-                SomeClassAudit.version == 1).all(),
-            [SomeClassAudit(version=1, name='sc1')]
+                SomeClassAudit.audit_rec_id == 1).all(),
+            [SomeClassAudit(audit_rec_id=1, name='sc1')]
         )
 
         sc.name = 'sc1modified2'
 
         eq_(
             sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.version).all(),
+                SomeClassAudit.audit_rec_id).all(),
             [
-                SomeClassAudit(version=1, name='sc1'),
-                SomeClassAudit(version=2, name='sc1modified')
+                SomeClassAudit(audit_rec_id=1, name='sc1'),
+                SomeClassAudit(audit_rec_id=2, name='sc1modified')
             ]
         )
 
-        assert sc.version == 3
+        assert sc.audit_rec_id == 3
 
         sess.commit()
 
@@ -87,10 +89,10 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         eq_(
             sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.version).all(),
+                SomeClassAudit.audit_rec_id).all(),
             [
-                SomeClassAudit(version=1, name='sc1'),
-                SomeClassAudit(version=2, name='sc1modified')
+                SomeClassAudit(audit_rec_id=1, name='sc1'),
+                SomeClassAudit(audit_rec_id=2, name='sc1modified')
             ]
         )
 
@@ -99,22 +101,22 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         eq_(
             sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.version).all(),
+                SomeClassAudit.audit_rec_id).all(),
             [
-                SomeClassAudit(version=1, name='sc1'),
-                SomeClassAudit(version=2, name='sc1modified'),
-                SomeClassAudit(version=3, name='sc1modified2')
+                SomeClassAudit(audit_rec_id=1, name='sc1'),
+                SomeClassAudit(audit_rec_id=2, name='sc1modified'),
+                SomeClassAudit(audit_rec_id=3, name='sc1modified2')
             ]
         )
 
     def test_w_mapper_versioning(self):
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
             name = Column(String(50))
 
-        SomeClass.__mapper__.version_id_col = SomeClass.__table__.c.version
+        SomeClass.__mapper__.version_id_col = SomeClass.__table__.c.audit_rec_id
 
         self.create_tables()
         sess = self.session
@@ -129,7 +131,7 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sc.name = 'sc1modified_again'
         sess.commit()
 
-        eq_(sc.version, 2)
+        eq_(sc.audit_rec_id, 2)
 
         assert_raises(
             orm_exc.StaleDataError,
@@ -137,7 +139,7 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         )
 
     def test_from_null(self):
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
@@ -152,10 +154,10 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sc.name = 'sc1'
         sess.commit()
 
-        assert sc.version == 2
+        assert sc.audit_rec_id == 2
 
     def test_insert_null(self):
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
@@ -181,12 +183,12 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
             [(True, ), (None, )]
         )
 
-        eq_(sc.version, 3)
+        eq_(sc.audit_rec_id, 3)
 
     def test_deferred(self):
         """test versioning of unloaded, deferred columns."""
 
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
@@ -206,18 +208,18 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sc.name = 'sc1modified'
         sess.commit()
 
-        assert sc.version == 2
+        assert sc.audit_rec_id == 2
 
         SomeClassAudit = SomeClass.__audit_mapper__.class_
 
         eq_(
             sess.query(SomeClassAudit).filter(
-                SomeClassAudit.version == 1).all(),
-            [SomeClassAudit(version=1, name='sc1', data='somedata')]
+                SomeClassAudit.audit_rec_id == 1).all(),
+            [SomeClassAudit(audit_rec_id=1, name='sc1', data='somedata')]
         )
 
     def test_joined_inheritance(self):
-        class BaseClass(Versioned, self.Base, ComparableEntity):
+        class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
 
             id = Column(Integer, primary_key=True)
@@ -271,10 +273,10 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
             sess.query(BaseClassAudit).order_by(BaseClassAudit.id).all(),
             [
                 SubClassSeparatePkAudit(
-                    id=1, name='sep1', type='sep', version=1),
-                BaseClassAudit(id=2, name='base1', type='base', version=1),
+                    id=1, name='sep1', type='sep', audit_rec_id=1),
+                BaseClassAudit(id=2, name='base1', type='base', audit_rec_id=1),
                 SubClassSamePkAudit(
-                    id=3, name='same1', type='same', version=1)
+                    id=3, name='same1', type='same', audit_rec_id=1)
             ]
         )
 
@@ -282,37 +284,37 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         eq_(
             sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.version).all(),
+                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
             [
                 SubClassSeparatePkAudit(
-                    id=1, name='sep1', type='sep', version=1),
-                BaseClassAudit(id=2, name='base1', type='base', version=1),
+                    id=1, name='sep1', type='sep', audit_rec_id=1),
+                BaseClassAudit(id=2, name='base1', type='base', audit_rec_id=1),
                 SubClassSamePkAudit(
-                    id=3, name='same1', type='same', version=1),
+                    id=3, name='same1', type='same', audit_rec_id=1),
                 SubClassSamePkAudit(
-                    id=3, name='same1', type='same', version=2)
+                    id=3, name='same1', type='same', audit_rec_id=2)
             ]
         )
 
         base1.name = 'base1mod2'
         eq_(
             sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.version).all(),
+                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
             [
                 SubClassSeparatePkAudit(
-                    id=1, name='sep1', type='sep', version=1),
-                BaseClassAudit(id=2, name='base1', type='base', version=1),
+                    id=1, name='sep1', type='sep', audit_rec_id=1),
+                BaseClassAudit(id=2, name='base1', type='base', audit_rec_id=1),
                 BaseClassAudit(
-                    id=2, name='base1mod', type='base', version=2),
+                    id=2, name='base1mod', type='base', audit_rec_id=2),
                 SubClassSamePkAudit(
-                    id=3, name='same1', type='same', version=1),
+                    id=3, name='same1', type='same', audit_rec_id=1),
                 SubClassSamePkAudit(
-                    id=3, name='same1', type='same', version=2)
+                    id=3, name='same1', type='same', audit_rec_id=2)
             ]
         )
 
     def test_joined_inheritance_multilevel(self):
-        class BaseClass(Versioned, self.Base, ComparableEntity):
+        class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
 
             id = Column(Integer, primary_key=True)
@@ -358,17 +360,17 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
             "subtable_audit.id AS subtable_audit_id, "
             "basetable_audit.id AS basetable_audit_id, "
 
-            "subsubtable_audit.changed AS subsubtable_audit_changed, "
-            "subtable_audit.changed AS subtable_audit_changed, "
-            "basetable_audit.changed AS basetable_audit_changed, "
+            "subsubtable_audit.audit_timestamp AS subsubtable_audit_audit_timestamp, "
+            "subtable_audit.audit_timestamp AS subtable_audit_audit_timestamp, "
+            "basetable_audit.audit_timestamp AS basetable_audit_audit_timestamp, "
 
             "basetable_audit.name AS basetable_audit_name, "
 
             "basetable_audit.type AS basetable_audit_type, "
 
-            "subsubtable_audit.version AS subsubtable_audit_version, "
-            "subtable_audit.version AS subtable_audit_version, "
-            "basetable_audit.version AS basetable_audit_version, "
+            "subsubtable_audit.audit_rec_id AS subsubtable_audit_audit_rec_id, "
+            "subtable_audit.audit_rec_id AS subtable_audit_audit_rec_id, "
+            "basetable_audit.audit_rec_id AS basetable_audit_audit_rec_id, "
 
 
             "subtable_audit.base_id AS subtable_audit_base_id, "
@@ -377,10 +379,10 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
             "FROM basetable_audit "
             "JOIN subtable_audit "
             "ON basetable_audit.id = subtable_audit.base_id "
-            "AND basetable_audit.version = subtable_audit.version "
+            "AND basetable_audit.audit_rec_id = subtable_audit.audit_rec_id "
             "JOIN subsubtable_audit ON subtable_audit.id = "
-            "subsubtable_audit.id AND subtable_audit.version = "
-            "subsubtable_audit.version"
+            "subsubtable_audit.id AND subtable_audit.audit_rec_id = "
+            "subsubtable_audit.audit_rec_id"
         )
 
         ssc = SubSubClass(name='ss1', subdata1='sd1', subdata2='sd2')
@@ -396,14 +398,14 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         eq_(
             sess.query(SubSubAudit).all(),
             [SubSubAudit(name='ss1', subdata1='sd1',
-                                subdata2='sd2', type='subsub', version=1)]
+                                subdata2='sd2', type='subsub', audit_rec_id=1)]
         )
         eq_(ssc, SubSubClass(
             name='ss1', subdata1='sd11',
-            subdata2='sd22', version=2))
+            subdata2='sd22', audit_rec_id=2))
 
-    def test_joined_inheritance_changed(self):
-        class BaseClass(Versioned, self.Base, ComparableEntity):
+    def test_joined_inheritance_audit_timestamp(self):
+        class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
 
             id = Column(Integer, primary_key=True)
@@ -434,20 +436,20 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         s1.name = 's2'
         sess.commit()
 
-        actual_changed_base = sess.scalar(
-            select([BaseClass.__audit_mapper__.local_table.c.changed]))
-        actual_changed_sub = sess.scalar(
-            select([SubClass.__audit_mapper__.local_table.c.changed]))
+        actual_audit_timestamp_base = sess.scalar(
+            select([BaseClass.__audit_mapper__.local_table.c.audit_timestamp]))
+        actual_audit_timestamp_sub = sess.scalar(
+            select([SubClass.__audit_mapper__.local_table.c.audit_timestamp]))
         h1 = sess.query(BaseClassAudit).first()
-        eq_(h1.changed, actual_changed_base)
-        eq_(h1.changed, actual_changed_sub)
+        eq_(h1.audit_timestamp, actual_audit_timestamp_base)
+        eq_(h1.audit_timestamp, actual_audit_timestamp_sub)
 
         h1 = sess.query(SubClassAudit).first()
-        eq_(h1.changed, actual_changed_base)
-        eq_(h1.changed, actual_changed_sub)
+        eq_(h1.audit_timestamp, actual_audit_timestamp_base)
+        eq_(h1.audit_timestamp, actual_audit_timestamp_sub)
 
     def test_single_inheritance(self):
-        class BaseClass(Versioned, self.Base, ComparableEntity):
+        class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
 
             id = Column(Integer, primary_key=True)
@@ -479,8 +481,8 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         eq_(
             sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.version).all(),
-            [BaseClassAudit(id=1, name='b1', type='base', version=1)]
+                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
+            [BaseClassAudit(id=1, name='b1', type='base', audit_rec_id=1)]
         )
 
         sc.name = 's1modified'
@@ -488,12 +490,12 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
         eq_(
             sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.version).all(),
+                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
             [
-                BaseClassAudit(id=1, name='b1', type='base', version=1),
+                BaseClassAudit(id=1, name='b1', type='base', audit_rec_id=1),
                 BaseClassAudit(
-                    id=1, name='b1modified', type='base', version=2),
-                SubClassAudit(id=2, name='s1', type='sub', version=1)
+                    id=1, name='b1modified', type='base', audit_rec_id=2),
+                SubClassAudit(id=2, name='s1', type='sub', audit_rec_id=1)
             ]
         )
 
@@ -503,7 +505,7 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sess.flush()
 
     def test_unique(self):
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
@@ -519,12 +521,12 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sc.data = 'sc1modified'
         sess.commit()
 
-        assert sc.version == 2
+        assert sc.audit_rec_id == 2
 
         sc.data = 'sc1modified2'
         sess.commit()
 
-        assert sc.version == 3
+        assert sc.audit_rec_id == 3
 
     def test_relationship(self):
 
@@ -533,7 +535,7 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
 
             id = Column(Integer, primary_key=True)
 
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
@@ -549,32 +551,32 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sess.add(sc)
         sess.commit()
 
-        assert sc.version == 1
+        assert sc.audit_rec_id == 1
 
         sr1 = SomeRelated()
         sc.related = sr1
         sess.commit()
 
-        assert sc.version == 2
+        assert sc.audit_rec_id == 2
 
         eq_(
             sess.query(SomeClassAudit).filter(
-                SomeClassAudit.version == 1).all(),
-            [SomeClassAudit(version=1, name='sc1', related_id=None)]
+                SomeClassAudit.audit_rec_id == 1).all(),
+            [SomeClassAudit(audit_rec_id=1, name='sc1', related_id=None)]
         )
 
         sc.related = None
 
         eq_(
             sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.version).all(),
+                SomeClassAudit.audit_rec_id).all(),
             [
-                SomeClassAudit(version=1, name='sc1', related_id=None),
-                SomeClassAudit(version=2, name='sc1', related_id=sr1.id)
+                SomeClassAudit(audit_rec_id=1, name='sc1', related_id=None),
+                SomeClassAudit(audit_rec_id=2, name='sc1', related_id=sr1.id)
             ]
         )
 
-        assert sc.version == 3
+        assert sc.audit_rec_id == 3
 
     def test_backref_relationship(self):
 
@@ -586,7 +588,7 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
             related_id = Column(Integer, ForeignKey('sometable.id'))
             related = relationship("SomeClass", backref='related')
 
-        class SomeClass(Versioned, self.Base, ComparableEntity):
+        class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
             id = Column(Integer, primary_key=True)
@@ -597,20 +599,20 @@ class TestVersioning(TestCase, AssertsCompiledSQL):
         sess.add(sc)
         sess.commit()
 
-        assert sc.version == 1
+        assert sc.audit_rec_id == 1
 
         sr = SomeRelated(name='sr', related=sc)
         sess.add(sr)
         sess.commit()
 
-        assert sc.version == 1
+        assert sc.audit_rec_id == 1
 
         sr.name = 'sr2'
         sess.commit()
 
-        assert sc.version == 1
+        assert sc.audit_rec_id == 1
 
         sess.delete(sr)
         sess.commit()
 
-        assert sc.version == 1
+        assert sc.audit_rec_id == 1

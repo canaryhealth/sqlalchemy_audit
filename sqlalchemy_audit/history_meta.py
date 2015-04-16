@@ -1,11 +1,11 @@
-"""Versioned mixin class and other utilities."""
+"""Auditable mixin class and other utilities."""
+import time
 
+from sqlalchemy import Table, Column, ForeignKeyConstraint, Integer, Float
+from sqlalchemy import event, util
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import mapper, attributes, object_mapper
 from sqlalchemy.orm.exc import UnmappedColumnError
-from sqlalchemy import Table, Column, ForeignKeyConstraint, Integer, DateTime
-from sqlalchemy import event, util
-import datetime
 from sqlalchemy.orm.properties import RelationshipProperty
 
 
@@ -80,23 +80,23 @@ def _audit_mapper(local_mapper):
         if super_mapper:
             super_fks.append(
                 (
-                    'version', super_audit_mapper.local_table.c.version
+                    'audit_rec_id', super_audit_mapper.local_table.c.audit_rec_id
                 )
             )
 
-        # "version" stores the integer version id.  This column is
+        # "audit_rec_id" stores the integer audit record id.  This column is
         # required.
         cols.append(
             Column(
-                'version', Integer, primary_key=True,
+                'audit_rec_id', Integer, primary_key=True,
                 autoincrement=False, info=version_meta))
 
-        # "changed" column stores the UTC timestamp of when the
+        # "audit_timestamp" column stores the UTC timestamp of when the
         # audit row was created.
         # This column is optional and can be omitted.
         cols.append(Column(
-            'changed', DateTime,
-            default=datetime.datetime.utcnow,
+            'audit_timestamp', Float,
+            default=time.time,
             info=version_meta))
 
         if super_fks:
@@ -121,17 +121,17 @@ def _audit_mapper(local_mapper):
         bases = (super_audit_mapper.class_,)
 
         if table is not None:
-            properties['changed'] = (
-                (table.c.changed, ) +
-                tuple(super_audit_mapper.attrs.changed.columns)
+            properties['audit_timestamp'] = (
+                (table.c.audit_timestamp, ) +
+                tuple(super_audit_mapper.attrs.audit_timestamp.columns)
             )
 
     else:
         bases = local_mapper.base_mapper.class_.__bases__
-    versioned_cls = type.__new__(type, "%sAudit" % cls.__name__, bases, {})
+    auditable_cls = type.__new__(type, "%sAudit" % cls.__name__, bases, {})
 
     m = mapper(
-        versioned_cls,
+        auditable_cls,
         table,
         inherits=super_audit_mapper,
         polymorphic_on=polymorphic_on,
@@ -142,13 +142,13 @@ def _audit_mapper(local_mapper):
 
     if not super_audit_mapper:
         local_mapper.local_table.append_column(
-            Column('version', Integer, default=1, nullable=False)
+            Column('audit_rec_id', Integer, default=1, nullable=False)
         )
         local_mapper.add_property(
-            "version", local_mapper.local_table.c.version)
+            "audit_rec_id", local_mapper.local_table.c.audit_rec_id)
 
 
-class Versioned(object):
+class Auditable(object):
     @declared_attr
     def __mapper_cls__(cls):
         def map(cls, *arg, **kw):
@@ -158,13 +158,13 @@ class Versioned(object):
         return map
 
 
-def versioned_objects(iter):
+def auditable_objects(iter):
     for obj in iter:
         if hasattr(obj, '__audit_mapper__'):
             yield obj
 
 
-def create_version(obj, session, deleted=False):
+def create_record(obj, session, deleted=False):
     obj_mapper = object_mapper(obj)
     audit_mapper = obj.__audit_mapper__
     audit_cls = audit_mapper.class_
@@ -175,14 +175,14 @@ def create_version(obj, session, deleted=False):
 
     obj_changed = False
 
-    for om, hm in zip(
+    for om, am in zip(
             obj_mapper.iterate_to_root(),
             audit_mapper.iterate_to_root()
     ):
-        if hm.single:
+        if am.single:
             continue
 
-        for hist_col in hm.local_table.c:
+        for hist_col in am.local_table.c:
             if _is_versioning_col(hist_col):
                 continue
 
@@ -237,18 +237,18 @@ def create_version(obj, session, deleted=False):
     if not obj_changed and not deleted:
         return
 
-    attr['version'] = obj.version
+    attr['audit_rec_id'] = obj.audit_rec_id
     hist = audit_cls()
     for key, value in attr.items():
         setattr(hist, key, value)
     session.add(hist)
-    obj.version += 1
+    obj.audit_rec_id += 1
 
 
-def versioned_session(session):
+def auditable_session(session):
     @event.listens_for(session, 'before_flush')
     def before_flush(session, flush_context, instances):
-        for obj in versioned_objects(session.dirty):
-            create_version(obj, session)
-        for obj in versioned_objects(session.deleted):
-            create_version(obj, session, deleted=True)
+        for obj in auditable_objects(session.dirty):
+            create_record(obj, session)
+        for obj in auditable_objects(session.deleted):
+            create_record(obj, session, deleted=True)
