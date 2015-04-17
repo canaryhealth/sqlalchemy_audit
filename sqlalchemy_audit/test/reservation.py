@@ -21,4 +21,4 @@ class Reservation(Auditable, Base):
   party = Column(Integer)
 
   def __repr__(self):
-    return '<Reservation(name="%s", date="%s", time="%s", party="%d">' % (self.name, self.date, self.time, self.party)
+    return '<Reservation(id="%s", name="%s", date="%s", time="%s", party="%d">' % (self.id, self.name, self.date, self.time, self.party)
