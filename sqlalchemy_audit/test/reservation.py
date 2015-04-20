@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import uuid
 
 from sqlalchemy import Column, Date, DateTime, Integer, String, Time
 from sqlalchemy.ext.declarative import declarative_base
@@ -14,7 +15,7 @@ Session = sessionmaker()
 
 class Reservation(Auditable, Base):
   __tablename__ = 'reservations'
-  id = Column(String, primary_key=True)
+  id = Column(String, primary_key=True, default=lambda:str(uuid.uuid4()))
   name = Column(String)
   date = Column(Date)
   time = Column(Time)

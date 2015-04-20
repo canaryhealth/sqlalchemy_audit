@@ -20,4 +20,5 @@ class DbTestCase(unittest.TestCase):
 
   def tearDown(self):
     super(DbTestCase, self).tearDown()
+    self.session.close()
     Base.metadata.drop_all(self.engine)

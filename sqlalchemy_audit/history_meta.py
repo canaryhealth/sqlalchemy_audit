@@ -207,9 +207,14 @@ def create_record(obj, session, new=False, deleted=False):
 def auditable_session(session):
     @event.listens_for(session, 'before_flush')
     def before_flush(session, flush_context, instances):
-        for obj in auditable_objects(session.new):
-            create_record(obj, session, new=True)
         for obj in auditable_objects(session.dirty):
             create_record(obj, session)
         for obj in auditable_objects(session.deleted):
             create_record(obj, session, deleted=True)
+
+    @event.listens_for(session, 'after_flush')
+    def after_flush(session, flush_context):
+        # inserts need to be after flush so that client-side defaults are 
+        # populate
+        for obj in auditable_objects(session.new):
+            create_record(obj, session, new=True)

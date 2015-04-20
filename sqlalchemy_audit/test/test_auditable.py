@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
 import morph
-import uuid
 
 from . import DbTestCase
 from .reservation import Reservation
@@ -21,7 +20,7 @@ class TestAuditable(DbTestCase):
 
   def test_insert(self):
     # insert
-    reservation = Reservation(id=str(uuid.uuid4()), name='Me', 
+    reservation = Reservation(name='Me', 
                               date=datetime.date(2015, 4, 2), 
                               time=datetime.time(8, 25), party=2)
     self.session.add(reservation)
@@ -47,7 +46,7 @@ class TestAuditable(DbTestCase):
 
   def test_update(self):
     # insert
-    reservation = Reservation(id=str(uuid.uuid4()), name='Me', 
+    reservation = Reservation(name='Me', 
                               date=datetime.date(2015, 4, 13), 
                               time=datetime.time(19, 00), party=10)
     self.session.add(reservation)
@@ -95,7 +94,7 @@ class TestAuditable(DbTestCase):
 
   def test_delete(self):
     # insert
-    reservation = Reservation(id=str(uuid.uuid4()), name='Me', 
+    reservation = Reservation(name='Me', 
                               date=datetime.date(2015, 5, 21), 
                               time=datetime.time(18, 45), party=6)
     self.session.add(reservation)
@@ -117,6 +116,105 @@ class TestAuditable(DbTestCase):
         ReservationAudit(id=reservation.id, name=None,
                          date=None, time=None, 
                          party=None, audit_isdelete=True),
+      ],
+      pick=('id', 'name', 'date', 'time', 'party', 'audit_isdelete')
+    )
+
+
+  def test_insert_null(self):
+    # insert
+    reservation = Reservation(name=None, 
+                              date=None, time=None, party=None)
+    self.session.add(reservation)
+    self.session.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      self.session.query(Reservation).all(),
+      [reservation],
+      pick=('id', 'name', 'date', 'time', 'party'))
+
+    # assert audit records
+    self.assertSeqEqual(
+      self.session.query(ReservationAudit).order_by('audit_timestamp').all(),
+      [ ReservationAudit(id=reservation.id,  name=None,
+                         date=None, time=None, party=None,
+                         audit_isdelete=False),
+      ],
+      pick=('id', 'name', 'date', 'time', 'party', 'audit_isdelete')
+    )
+
+
+  def test_from_null(self):
+    # insert
+    reservation = Reservation(name=None, 
+                              date=None, time=None, party=None)
+    self.session.add(reservation)
+    self.session.commit()
+    reservation.date = datetime.date(2015, 5, 15)
+    reservation.time = datetime.time(19, 15)
+    reservation.party = 11
+    self.session.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      self.session.query(Reservation).all(),
+      [ Reservation(id=reservation.id, name=None,
+                    date=datetime.date(2015, 5, 15), 
+                    time=datetime.time(19, 15),
+                    party=11)
+      ],
+      pick=('id', 'name', 'date', 'time', 'party')
+    )
+    
+    # assert audit records
+    self.assertSeqEqual(
+      self.session.query(ReservationAudit).order_by('audit_timestamp').all(),
+      [ ReservationAudit(id=reservation.id, name=None, 
+                         date=None, time=None, party=None,
+                         audit_isdelete=False),
+        ReservationAudit(id=reservation.id, name=None,
+                         date=datetime.date(2015, 5, 15),
+                         time=datetime.time(19, 15),
+                         party=11, audit_isdelete=False),
+      ],
+      pick=('id', 'name', 'date', 'time', 'party', 'audit_isdelete')
+    )
+
+
+  def test_to_null(self):
+    # insert
+    reservation = Reservation(name=None, 
+                              date=datetime.date(2015, 5, 15),
+                              time=datetime.time(19, 15),
+                              party=11)
+    self.session.add(reservation)
+    self.session.commit()
+    reservation.date = None
+    reservation.time = None
+    reservation.party = None
+    self.session.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      self.session.query(Reservation).all(),
+      [ Reservation(id=reservation.id, name=None,
+                    date=None, time=None, party=None)
+      ],
+      pick=('id', 'name', 'date', 'time', 'party')
+    )
+    
+    # assert audit records
+    self.assertSeqEqual(
+      self.session.query(ReservationAudit).order_by('audit_timestamp').all(),
+      [ ReservationAudit(id=reservation.id, name=None,
+                         date=datetime.date(2015, 5, 15),
+                         time=datetime.time(19, 15),
+                         party=11, audit_isdelete=False),
+        ReservationAudit(id=reservation.id, name=None, 
+                         date=None, time=None, party=None,
+                         audit_isdelete=False),
+        
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'audit_isdelete')
     )
