@@ -1,5 +1,6 @@
 """Unit tests illustrating usage of the ``history_meta.py``
 module functions."""
+import morph
 import unittest
 import warnings
 
@@ -28,6 +29,14 @@ def setup_module():
 class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
     __dialect__ = 'default'
 
+    def assertSeqEqual(self, result, expected, pick=None):
+        if pick is not None and morph.isseq(result) and morph.isseq(expected):
+            result = [morph.pick(item, *morph.tolist(pick)) for item in result]
+            expected = [morph.pick(item, *morph.tolist(pick)) for item in expected]
+
+        self.assertEqual(result, expected, 'the lists are different')
+
+
     def setUp(self):
         self.session = Session(engine)
         self.Base = declarative_base()
@@ -41,74 +50,7 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
     def create_tables(self):
         self.Base.metadata.create_all(engine)
 
-    def test_plain(self):
-        class SomeClass(Auditable, self.Base, ComparableEntity):
-            __tablename__ = 'sometable'
-
-            id = Column(Integer, primary_key=True)
-            name = Column(String(50))
-
-        self.create_tables()
-        sess = self.session
-        sc = SomeClass(name='sc1')
-        sess.add(sc)
-        sess.commit()
-
-        sc.name = 'sc1modified'
-        sess.commit()
-
-        assert sc.audit_rec_id == 2
-
-        SomeClassAudit = SomeClass.__audit_mapper__.class_
-
-        eq_(
-            sess.query(SomeClassAudit).filter(
-                SomeClassAudit.audit_rec_id == 1).all(),
-            [SomeClassAudit(audit_rec_id=1, name='sc1')]
-        )
-
-        sc.name = 'sc1modified2'
-
-        eq_(
-            sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.audit_rec_id).all(),
-            [
-                SomeClassAudit(audit_rec_id=1, name='sc1'),
-                SomeClassAudit(audit_rec_id=2, name='sc1modified')
-            ]
-        )
-
-        assert sc.audit_rec_id == 3
-
-        sess.commit()
-
-        sc.name = 'temp'
-        sc.name = 'sc1modified2'
-
-        sess.commit()
-
-        eq_(
-            sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.audit_rec_id).all(),
-            [
-                SomeClassAudit(audit_rec_id=1, name='sc1'),
-                SomeClassAudit(audit_rec_id=2, name='sc1modified')
-            ]
-        )
-
-        sess.delete(sc)
-        sess.commit()
-
-        eq_(
-            sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.audit_rec_id).all(),
-            [
-                SomeClassAudit(audit_rec_id=1, name='sc1'),
-                SomeClassAudit(audit_rec_id=2, name='sc1modified'),
-                SomeClassAudit(audit_rec_id=3, name='sc1modified2')
-            ]
-        )
-
+    '''
     def test_w_mapper_versioning(self):
         class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
@@ -527,92 +469,122 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
         sess.commit()
 
         assert sc.audit_rec_id == 3
+    '''
 
     def test_relationship(self):
-
-        class SomeRelated(self.Base, ComparableEntity):
-            __tablename__ = 'somerelated'
-
-            id = Column(Integer, primary_key=True)
-
         class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
-
             id = Column(Integer, primary_key=True)
             name = Column(String(50))
             related_id = Column(Integer, ForeignKey('somerelated.id'))
             related = relationship("SomeRelated", backref='classes')
 
+        class SomeRelated(Auditable, self.Base, ComparableEntity):
+            __tablename__ = 'somerelated'
+            id = Column(Integer, primary_key=True)
+            desc = Column(String(50))
+
         SomeClassAudit = SomeClass.__audit_mapper__.class_
+        SomeRelatedAudit = SomeRelated.__audit_mapper__.class_
 
         self.create_tables()
         sess = self.session
-        sc = SomeClass(name='sc1')
-        sess.add(sc)
+        sc1 = SomeClass(name='sc1')
+        sess.add(sc1)
+        sess.commit()
+        sr1 = SomeRelated(desc='sr1')
+        sc1.related = sr1
         sess.commit()
 
-        assert sc.audit_rec_id == 1
-
-        sr1 = SomeRelated()
-        sc.related = sr1
-        sess.commit()
-
-        assert sc.audit_rec_id == 2
-
-        eq_(
-            sess.query(SomeClassAudit).filter(
-                SomeClassAudit.audit_rec_id == 1).all(),
-            [SomeClassAudit(audit_rec_id=1, name='sc1', related_id=None)]
+        # assert source
+        self.assertSeqEqual(
+            self.session.query(SomeClass).all(),
+            [sc1],
+            pick=('id', 'name')
+        )
+        self.assertSeqEqual(
+            self.session.query(SomeRelated).all(),
+            [sr1],
+            pick=('id', 'desc')
         )
 
-        sc.related = None
-
-        eq_(
-            sess.query(SomeClassAudit).order_by(
-                SomeClassAudit.audit_rec_id).all(),
+        # assert audit records
+        self.assertSeqEqual(
+            sess.query(SomeClassAudit).order_by(SomeClassAudit.audit_timestamp).all(),
             [
-                SomeClassAudit(audit_rec_id=1, name='sc1', related_id=None),
-                SomeClassAudit(audit_rec_id=2, name='sc1', related_id=sr1.id)
-            ]
+                SomeClassAudit(id=sc1.id, name='sc1', related_id=None),
+                SomeClassAudit(id=sc1.id, name='sc1', related_id=sr1.id),
+            ],
+            pick=('id', 'name', 'related_id')
+        )
+        self.assertSeqEqual(
+            sess.query(SomeRelatedAudit).order_by(SomeRelatedAudit.audit_timestamp).all(),
+            [
+                SomeRelatedAudit(id=sr1.id, desc='sr1')
+            ],
+            pick=('id', 'desc')
         )
 
-        assert sc.audit_rec_id == 3
 
     def test_backref_relationship(self):
-
-        class SomeRelated(self.Base, ComparableEntity):
-            __tablename__ = 'somerelated'
-
+        class SomeClass(Auditable, self.Base, ComparableEntity):
+            __tablename__ = 'sometable'
             id = Column(Integer, primary_key=True)
             name = Column(String(50))
+
+        class SomeRelated(Auditable, self.Base, ComparableEntity):
+            __tablename__ = 'somerelated'
+            id = Column(Integer, primary_key=True)
+            desc = Column(String(50))
             related_id = Column(Integer, ForeignKey('sometable.id'))
             related = relationship("SomeClass", backref='related')
 
-        class SomeClass(Auditable, self.Base, ComparableEntity):
-            __tablename__ = 'sometable'
-
-            id = Column(Integer, primary_key=True)
+        SomeClassAudit = SomeClass.__audit_mapper__.class_
+        SomeRelatedAudit = SomeRelated.__audit_mapper__.class_
 
         self.create_tables()
         sess = self.session
-        sc = SomeClass()
-        sess.add(sc)
+        sc1 = SomeClass(name='sc1')
+        sess.add(sc1)
+        sess.commit()
+        sr1 = SomeRelated(desc='sr1', related=sc1)
+        sess.add(sr1)
+        sess.commit()
+        sr1.desc = 'sr2'
+        sess.commit()
+        sess.delete(sr1)
         sess.commit()
 
-        assert sc.audit_rec_id == 1
+        # assert source
+        self.assertSeqEqual(
+            self.session.query(SomeClass).all(),
+            [sc1],
+            pick=('id', 'name')
+        )
+        self.assertSeqEqual(
+            self.session.query(SomeRelated).all(),
+            [],
+            pick=('id', 'desc')
+        )
 
-        sr = SomeRelated(name='sr', related=sc)
-        sess.add(sr)
-        sess.commit()
-
-        assert sc.audit_rec_id == 1
-
-        sr.name = 'sr2'
-        sess.commit()
-
-        assert sc.audit_rec_id == 1
-
-        sess.delete(sr)
-        sess.commit()
-
-        assert sc.audit_rec_id == 1
+        # assert audit records
+        self.assertSeqEqual(
+            sess.query(SomeClassAudit).order_by(SomeClassAudit.audit_timestamp).all(),
+            [
+                SomeClassAudit(id=sc1.id, name='sc1'),
+                SomeClassAudit(id=sc1.id, name='sc1'),
+            ],
+            pick=('id', 'name')
+        )
+        self.assertSeqEqual(
+            sess.query(SomeRelatedAudit).order_by(SomeRelatedAudit.audit_timestamp).all(),
+            [
+                SomeRelatedAudit(id=sr1.id, desc='sr1', related_id=sc1.id,
+                                 audit_isdelete=False),
+                SomeRelatedAudit(id=sr1.id, desc='sr2', related_id=sc1.id,
+                                 audit_isdelete=False),
+                SomeRelatedAudit(id=sr1.id, desc=None, related_id=None,
+                                 audit_isdelete=True),
+            ],
+            pick=('id', 'desc', 'audit_isdelete')
+        )
