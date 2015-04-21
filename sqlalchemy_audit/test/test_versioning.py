@@ -115,102 +115,119 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
             pick=('id', 'name', 'data', 'audit_isdelete')
         )
 
-    '''
+
     def test_joined_inheritance(self):
         class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
-
             id = Column(Integer, primary_key=True)
             name = Column(String(50))
             type = Column(String(20))
-
             __mapper_args__ = {
                 'polymorphic_on': type,
                 'polymorphic_identity': 'base'}
 
-        class SubClassSeparatePk(BaseClass):
-            __tablename__ = 'subtable1'
+        class SubClassSamePk(BaseClass):
+            __tablename__ = 'subtablesame'
+            id = Column(
+                Integer, ForeignKey('basetable.id'), primary_key=True)
+            subdata1 = Column(String(50))
+            __mapper_args__ = {'polymorphic_identity': 'same'}
 
+        class SubClassSeparatePk(BaseClass):
+            __tablename__ = 'subtablesep'
             id = column_property(
                 Column(Integer, primary_key=True),
                 BaseClass.id
             )
             base_id = Column(Integer, ForeignKey('basetable.id'))
-            subdata1 = Column(String(50))
-
-            __mapper_args__ = {'polymorphic_identity': 'sep'}
-
-        class SubClassSamePk(BaseClass):
-            __tablename__ = 'subtable2'
-
-            id = Column(
-                Integer, ForeignKey('basetable.id'), primary_key=True)
             subdata2 = Column(String(50))
-
-            __mapper_args__ = {'polymorphic_identity': 'same'}
+            __mapper_args__ = {'polymorphic_identity': 'sep'}
 
         self.create_tables()
         sess = self.session
 
-        sep1 = SubClassSeparatePk(name='sep1', subdata1='sep1subdata')
+        # inserts
         base1 = BaseClass(name='base1')
-        same1 = SubClassSamePk(name='same1', subdata2='same1subdata')
-        sess.add_all([sep1, base1, same1])
-        sess.commit()
-
-        base1.name = 'base1mod'
-        same1.subdata2 = 'same1subdatamod'
-        sep1.name = 'sep1mod'
-        sess.commit()
+        same1 = SubClassSamePk(name='same1', subdata1='same1subdata')
+        sep1 = SubClassSeparatePk(name='sep1', subdata2='sep1subdata')
+        sess.add(base1); sess.commit();
+        sess.add(same1); sess.commit();
+        sess.add(sep1); sess.commit();
+        # updates
+        base1.name = 'base1mod'; sess.commit();
+        same1.subdata1 = 'same1subdatamod'; sess.commit();
+        sep1.name = 'sep1mod'; sess.commit();
+        same1.subdata1 = 'same1subdatamod2'; sess.commit();
+        base1.name = 'base1mod2'; sess.commit();
 
         BaseClassAudit = BaseClass.__audit_mapper__.class_
-        SubClassSeparatePkAudit = \
-            SubClassSeparatePk.__audit_mapper__.class_
         SubClassSamePkAudit = SubClassSamePk.__audit_mapper__.class_
-        eq_(
-            sess.query(BaseClassAudit).order_by(BaseClassAudit.id).all(),
-            [
-                SubClassSeparatePkAudit(
-                    id=1, name='sep1', type='sep', audit_rec_id=1),
-                BaseClassAudit(id=2, name='base1', type='base', audit_rec_id=1),
-                SubClassSamePkAudit(
-                    id=3, name='same1', type='same', audit_rec_id=1)
-            ]
+        SubClassSeparatePkAudit = SubClassSeparatePk.__audit_mapper__.class_
+
+        # assert foreign keys
+        # basetable_audit.id : subtablesame_audit.id
+        self.assertTrue(
+            BaseClass.__audit_mapper__.local_table.c.id in \
+            [i.column for i in list(SubClassSamePk.__audit_mapper__.local_table.c.id.foreign_keys)]
+        )
+        # basetable_audit.id : subtablesep_audit.base_id
+        self.assertTrue(
+            BaseClass.__audit_mapper__.local_table.c.id in \
+            [i.column for i in list(SubClassSeparatePk.__audit_mapper__.local_table.c.base_id.foreign_keys)]
+        )
+        # basetable_audit.audit_rec_id : subtablesame_audit.audit_rec_id
+        self.assertTrue(
+            BaseClass.__audit_mapper__.local_table.c.audit_rec_id in \
+            [i.column for i in list(SubClassSeparatePk.__audit_mapper__.local_table.c.audit_rec_id.foreign_keys)]
+        )
+        # basetable_audit.audit_rec_id : subtablesep_audit.audit_rec_id
+        self.assertTrue(
+            BaseClass.__audit_mapper__.local_table.c.audit_rec_id in \
+            [i.column for i in list(SubClassSeparatePk.__audit_mapper__.local_table.c.audit_rec_id.foreign_keys)]
         )
 
-        same1.subdata2 = 'same1subdatamod2'
-
-        eq_(
-            sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
+        # assert data
+        self.assertSeqEqual(
+            sess.query(BaseClassAudit).order_by(BaseClassAudit.audit_timestamp).all(),
             [
-                SubClassSeparatePkAudit(
-                    id=1, name='sep1', type='sep', audit_rec_id=1),
-                BaseClassAudit(id=2, name='base1', type='base', audit_rec_id=1),
-                SubClassSamePkAudit(
-                    id=3, name='same1', type='same', audit_rec_id=1),
-                SubClassSamePkAudit(
-                    id=3, name='same1', type='same', audit_rec_id=2)
-            ]
-        )
-
-        base1.name = 'base1mod2'
-        eq_(
-            sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
-            [
-                SubClassSeparatePkAudit(
-                    id=1, name='sep1', type='sep', audit_rec_id=1),
-                BaseClassAudit(id=2, name='base1', type='base', audit_rec_id=1),
                 BaseClassAudit(
-                    id=2, name='base1mod', type='base', audit_rec_id=2),
+                    id=base1.id, name='base1', type='base', audit_isdelete=False),
                 SubClassSamePkAudit(
-                    id=3, name='same1', type='same', audit_rec_id=1),
+                    id=same1.id, name='same1', type='same', audit_isdelete=False),
+                SubClassSeparatePkAudit(
+                    id=sep1.id, name='sep1', type='sep', audit_isdelete=False),
+                BaseClassAudit(
+                    id=base1.id, name='base1mod', type='base', audit_isdelete=False),
                 SubClassSamePkAudit(
-                    id=3, name='same1', type='same', audit_rec_id=2)
-            ]
+                    id=same1.id, name='same1', type='same', audit_isdelete=False),
+                SubClassSeparatePkAudit(
+                    id=sep1.id, name='sep1mod', type='sep', audit_isdelete=False),
+                SubClassSamePkAudit(
+                    id=same1.id, name='same1', type='same', audit_isdelete=False),
+                BaseClassAudit(
+                    id=base1.id, name='base1mod2', type='base', audit_isdelete=False),
+            ],
+            pick=('id', 'name', 'type', 'audit_isdelete')
+        )
+        self.assertSeqEqual(
+            sess.query(SubClassSamePkAudit).order_by(SubClassSamePkAudit.audit_timestamp).all(),
+            [
+                SubClassSamePkAudit(id=same1.id, subdata1='same1subdata'),
+                SubClassSamePkAudit(id=same1.id, subdata1='same1subdatamod'),
+                SubClassSamePkAudit(id=same1.id, subdata1='same1subdatamod2'),
+            ],
+            pick=('subdata1')
+        )
+        self.assertSeqEqual(
+            sess.query(SubClassSeparatePkAudit).order_by(SubClassSeparatePkAudit.audit_timestamp).all(),
+            [
+                SubClassSeparatePkAudit(base_id=sep1.id, subdata2='sep1subdata'),
+                SubClassSeparatePkAudit(base_id=sep1.id, subdata2='sep1subdata'),
+            ],
+            pick=('base_id', 'subdata2')
         )
 
+    '''
     def test_joined_inheritance_multilevel(self):
         class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'

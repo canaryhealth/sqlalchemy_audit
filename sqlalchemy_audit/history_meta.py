@@ -24,15 +24,6 @@ def _audit_mapper(local_mapper):
     polymorphic_on = None
     super_fks = []
 
-    def _col_references_table(col, table):
-        '''
-        Returns whether column references table.
-        '''
-        for fk in col.foreign_keys:
-            if fk.references(table):
-                return True
-        return False
-
     def _col_copy(col):
         ''''
         Copies column, adds copied col reference to original column, removes 
@@ -49,35 +40,39 @@ def _audit_mapper(local_mapper):
     # create audit table if it does not exist
     if not super_mapper or \
             local_mapper.local_table is not super_mapper.local_table:
-        cols = []
+        audit_cols = []
         # add to column.info to identify columns used for auditing
         audit_meta = {"audit_meta": True}  
         # audit meta columns (see _is_audit_meta_col)
         #   - audit record id
         #   - UTC timestamp of when the audit row was created
         #   - boolean flag to identify that this record has since been deleted
-        cols.append(Column('audit_rec_id', String, primary_key=True,
-                           default=lambda:str(uuid.uuid4()), info=audit_meta))
-        cols.append(Column('audit_timestamp', Float, default=time.time,
-                           info=audit_meta))
-        cols.append(Column('audit_isdelete', Boolean, default=False,
-                           info=audit_meta))
+        audit_cols.append(Column('audit_rec_id', String, primary_key=True,
+                                 default=lambda:str(uuid.uuid4()), 
+                                 info=audit_meta))
+        audit_cols.append(Column('audit_timestamp', Float, default=time.time,
+                                 info=audit_meta))
+        audit_cols.append(Column('audit_isdelete', Boolean, default=False,
+                                 info=audit_meta))
 
         for column in local_mapper.local_table.c:
             if _is_audit_meta_col(column):
                 continue
 
-            col = _col_copy(column)
-            if super_mapper and \
-                    _col_references_table(column, super_mapper.local_table):
-                super_fks.append(
-                    (col.key,
-                     list(super_audit_mapper.local_table.primary_key)[0])
-                )
-            cols.append(col)
+            audit_col = _col_copy(column)
+            # if there is a fk between local_mapper and super_mapper, set up 
+            # same for local_audit_mapper and super_audit_mapper
+            if super_mapper:
+                for fk in column.foreign_keys:
+                    if fk.references(super_mapper.local_table):
+                        super_fks.append(
+                            (audit_col.key,
+                             super_audit_mapper.local_table.c[fk.column.name])
+                        )
+            audit_cols.append(audit_col)
 
             if column is local_mapper.polymorphic_on:
-                polymorphic_on = col
+                polymorphic_on = audit_col
 
             orig_prop = local_mapper.get_property_by_column(column)
             # carry over column re-mappings
@@ -92,12 +87,12 @@ def _audit_mapper(local_mapper):
             )
 
         if super_fks:
-            cols.append(ForeignKeyConstraint(*zip(*super_fks)))
+            audit_cols.append(ForeignKeyConstraint(*zip(*super_fks)))
 
         table = Table(
             local_mapper.local_table.name + '_audit',
             local_mapper.local_table.metadata,
-            *cols,
+            *audit_cols,
             schema=local_mapper.local_table.schema
         )
     # single table inheritance. take any additional columns that may have
@@ -105,8 +100,8 @@ def _audit_mapper(local_mapper):
     else:
         for column in local_mapper.local_table.c:
             if column.key not in super_audit_mapper.local_table.c:
-                col = _col_copy(column)
-                super_audit_mapper.local_table.append_column(col)
+                audit_col = _col_copy(column)
+                super_audit_mapper.local_table.append_column(audit_col)
         table = None
 
 
