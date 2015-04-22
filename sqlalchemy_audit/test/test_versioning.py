@@ -227,50 +227,42 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
             pick=('base_id', 'subdata2')
         )
 
-    '''
+
     def test_joined_inheritance_multilevel(self):
         class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
-
             id = Column(Integer, primary_key=True)
             name = Column(String(50))
             type = Column(String(20))
-
             __mapper_args__ = {
                 'polymorphic_on': type,
                 'polymorphic_identity': 'base'}
 
         class SubClass(BaseClass):
             __tablename__ = 'subtable'
-
             id = column_property(
                 Column(Integer, primary_key=True),
                 BaseClass.id
             )
             base_id = Column(Integer, ForeignKey('basetable.id'))
             subdata1 = Column(String(50))
-
             __mapper_args__ = {'polymorphic_identity': 'sub'}
 
         class SubSubClass(SubClass):
             __tablename__ = 'subsubtable'
-
             id = Column(Integer, ForeignKey('subtable.id'), primary_key=True)
             subdata2 = Column(String(50))
-
             __mapper_args__ = {'polymorphic_identity': 'subsub'}
 
         self.create_tables()
+        sess = self.session
 
         SubSubAudit = SubSubClass.__audit_mapper__.class_
-        sess = self.session
         q = sess.query(SubSubAudit)
+
         self.assert_compile(
             q,
-
-
             "SELECT "
-
             "subsubtable_audit.id AS subsubtable_audit_id, "
             "subtable_audit.id AS subtable_audit_id, "
             "basetable_audit.id AS basetable_audit_id, "
@@ -279,46 +271,54 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
             "subtable_audit.audit_timestamp AS subtable_audit_audit_timestamp, "
             "basetable_audit.audit_timestamp AS basetable_audit_audit_timestamp, "
 
-            "basetable_audit.name AS basetable_audit_name, "
-
-            "basetable_audit.type AS basetable_audit_type, "
-
             "subsubtable_audit.audit_rec_id AS subsubtable_audit_audit_rec_id, "
             "subtable_audit.audit_rec_id AS subtable_audit_audit_rec_id, "
             "basetable_audit.audit_rec_id AS basetable_audit_audit_rec_id, "
 
+            "subsubtable_audit.audit_isdelete AS subsubtable_audit_audit_isdelete, "
+            "subtable_audit.audit_isdelete AS subtable_audit_audit_isdelete, "
+            "basetable_audit.audit_isdelete AS basetable_audit_audit_isdelete, "
+
+            "basetable_audit.name AS basetable_audit_name, "
+            "basetable_audit.type AS basetable_audit_type, "
 
             "subtable_audit.base_id AS subtable_audit_base_id, "
             "subtable_audit.subdata1 AS subtable_audit_subdata1, "
             "subsubtable_audit.subdata2 AS subsubtable_audit_subdata2 "
             "FROM basetable_audit "
             "JOIN subtable_audit "
-            "ON basetable_audit.id = subtable_audit.base_id "
-            "AND basetable_audit.audit_rec_id = subtable_audit.audit_rec_id "
-            "JOIN subsubtable_audit ON subtable_audit.id = "
-            "subsubtable_audit.id AND subtable_audit.audit_rec_id = "
-            "subsubtable_audit.audit_rec_id"
+            "ON basetable_audit.audit_rec_id = subtable_audit.audit_rec_id "
+            "AND basetable_audit.id = subtable_audit.base_id "
+            "JOIN subsubtable_audit "
+            "ON subtable_audit.audit_rec_id = subsubtable_audit.audit_rec_id "
+            "AND subtable_audit.id = subsubtable_audit.id"
         )
 
         ssc = SubSubClass(name='ss1', subdata1='sd1', subdata2='sd2')
         sess.add(ssc)
         sess.commit()
-        eq_(
-            sess.query(SubSubAudit).all(),
-            []
-        )
         ssc.subdata1 = 'sd11'
         ssc.subdata2 = 'sd22'
         sess.commit()
-        eq_(
-            sess.query(SubSubAudit).all(),
-            [SubSubAudit(name='ss1', subdata1='sd1',
-                                subdata2='sd2', type='subsub', audit_rec_id=1)]
-        )
-        eq_(ssc, SubSubClass(
-            name='ss1', subdata1='sd11',
-            subdata2='sd22', audit_rec_id=2))
 
+        # assert source
+        self.assertSeqEqual(
+            sess.query(SubSubClass).all(),
+            [ssc],
+            pick=('id', 'name', 'subdata1', 'subdata2')
+        )
+
+        # assert audit records
+        self.assertSeqEqual(
+            sess.query(SubSubAudit).order_by(SubSubAudit.audit_timestamp).all(),
+            [
+                SubSubAudit(id=ssc.id, name='ss1', subdata1='sd1', subdata2='sd2', type='subsub'),
+                SubSubAudit(id=ssc.id, name='ss1', subdata1='sd11', subdata2='sd22', type='subsub'),
+            ],
+            pick=('id', 'name', 'subdata1', 'subdata2', 'type')
+        )
+
+    '''
     def test_joined_inheritance_audit_timestamp(self):
         class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
@@ -563,3 +563,4 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
             ],
             pick=('id', 'desc', 'audit_isdelete')
         )
+
