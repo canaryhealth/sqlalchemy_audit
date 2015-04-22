@@ -37,7 +37,7 @@ def _audit_mapper(local_mapper):
         return col
 
     properties = util.OrderedDict()
-    # create audit table if it does not exist
+    # inspect local mapper and add columns in local table to audit table
     if not super_mapper or \
             local_mapper.local_table is not super_mapper.local_table:
         audit_cols = []
@@ -95,7 +95,7 @@ def _audit_mapper(local_mapper):
             *audit_cols,
             schema=local_mapper.local_table.schema
         )
-    # single table inheritance. take any additional columns that may have
+    # single table inheritance: take any additional columns that may have
     # been added and add them to the audit table.
     else:
         for column in local_mapper.local_table.c:

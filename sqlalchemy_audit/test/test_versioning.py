@@ -318,55 +318,10 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
             pick=('id', 'name', 'subdata1', 'subdata2', 'type')
         )
 
-    '''
-    def test_joined_inheritance_audit_timestamp(self):
-        class BaseClass(Auditable, self.Base, ComparableEntity):
-            __tablename__ = 'basetable'
-
-            id = Column(Integer, primary_key=True)
-            name = Column(String(50))
-            type = Column(String(20))
-
-            __mapper_args__ = {
-                'polymorphic_on': type,
-                'polymorphic_identity': 'base'
-            }
-
-        class SubClass(BaseClass):
-            __tablename__ = 'subtable'
-
-            id = Column(Integer, ForeignKey('basetable.id'), primary_key=True)
-
-            __mapper_args__ = {'polymorphic_identity': 'sep'}
-
-        self.create_tables()
-
-        BaseClassAudit = BaseClass.__audit_mapper__.class_
-        SubClassAudit = SubClass.__audit_mapper__.class_
-        sess = self.session
-        s1 = SubClass(name='s1')
-        sess.add(s1)
-        sess.commit()
-
-        s1.name = 's2'
-        sess.commit()
-
-        actual_audit_timestamp_base = sess.scalar(
-            select([BaseClass.__audit_mapper__.local_table.c.audit_timestamp]))
-        actual_audit_timestamp_sub = sess.scalar(
-            select([SubClass.__audit_mapper__.local_table.c.audit_timestamp]))
-        h1 = sess.query(BaseClassAudit).first()
-        eq_(h1.audit_timestamp, actual_audit_timestamp_base)
-        eq_(h1.audit_timestamp, actual_audit_timestamp_sub)
-
-        h1 = sess.query(SubClassAudit).first()
-        eq_(h1.audit_timestamp, actual_audit_timestamp_base)
-        eq_(h1.audit_timestamp, actual_audit_timestamp_sub)
 
     def test_single_inheritance(self):
         class BaseClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'basetable'
-
             id = Column(Integer, primary_key=True)
             name = Column(String(50))
             type = Column(String(50))
@@ -375,74 +330,79 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
                 'polymorphic_identity': 'base'}
 
         class SubClass(BaseClass):
-
             subname = Column(String(50), unique=True)
             __mapper_args__ = {'polymorphic_identity': 'sub'}
 
         self.create_tables()
         sess = self.session
 
-        b1 = BaseClass(name='b1')
-        sc = SubClass(name='s1', subname='sc1')
-
-        sess.add_all([b1, sc])
-
-        sess.commit()
-
-        b1.name = 'b1modified'
-
         BaseClassAudit = BaseClass.__audit_mapper__.class_
         SubClassAudit = SubClass.__audit_mapper__.class_
 
-        eq_(
-            sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
-            [BaseClassAudit(id=1, name='b1', type='base', audit_rec_id=1)]
+        b1 = BaseClass(name='b1')
+        sc = SubClass(name='s1', subname='sc1')
+        sess.add(b1); sess.commit();
+        sess.add(sc); sess.commit();
+
+        b1.name = 'b1modified'; sess.commit();
+        sc.subname = 'sc1sn'; sess.commit();
+        b1.name = 'b1modified2'; sess.commit();
+        sc.name = 's1modified2'; sess.commit();
+        
+        # assert source
+        self.assertSeqEqual(
+            sess.query(BaseClass).all(),
+            [b1, sc],
+            pick=('id', 'name', 'type', 'subname')
         )
 
-        sc.name = 's1modified'
-        b1.name = 'b1modified2'
-
-        eq_(
-            sess.query(BaseClassAudit).order_by(
-                BaseClassAudit.id, BaseClassAudit.audit_rec_id).all(),
+        # assert audit records
+        self.assertSeqEqual(
+            sess.query(BaseClassAudit).order_by(BaseClassAudit.audit_timestamp).all(),
             [
-                BaseClassAudit(id=1, name='b1', type='base', audit_rec_id=1),
-                BaseClassAudit(
-                    id=1, name='b1modified', type='base', audit_rec_id=2),
-                SubClassAudit(id=2, name='s1', type='sub', audit_rec_id=1)
-            ]
+                BaseClassAudit(id=b1.id, type='base', name='b1'),
+                SubClassAudit(id=sc.id, type='sub', name='s1', subname='sc1'),
+                BaseClassAudit(id=b1.id, type='base', name='b1modified'),
+                SubClassAudit(id=sc.id, type='sub', name='s1', subname='sc1sn'),
+                BaseClassAudit(id=b1.id, type='base', name='b1modified2'),
+                SubClassAudit(id=sc.id, type='sub', name='s1modified2', subname='sc1sn'),
+            ],
+            pick=('id', 'name', 'type', 'subname')
         )
 
-        # test the unique constraint on the subclass
-        # column
-        sc.name = "modifyagain"
-        sess.flush()
 
     def test_unique(self):
         class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
-
             id = Column(Integer, primary_key=True)
             name = Column(String(50), unique=True)
             data = Column(String(50))
 
         self.create_tables()
         sess = self.session
+
         sc = SomeClass(name='sc1', data='sc1')
         sess.add(sc)
         sess.commit()
-
         sc.data = 'sc1modified'
         sess.commit()
-
-        assert sc.audit_rec_id == 2
-
+        sc.name = 'sc1modified'
         sc.data = 'sc1modified2'
         sess.commit()
 
-        assert sc.audit_rec_id == 3
-    '''
+        SomeClassAudit = SomeClass.__audit_mapper__.class_
+
+        # assert audit records
+        self.assertSeqEqual(
+            sess.query(SomeClassAudit).order_by(SomeClassAudit.audit_timestamp).all(),
+            [
+                SomeClassAudit(id=sc.id, name='sc1', data='sc1'),
+                SomeClassAudit(id=sc.id, name='sc1', data='sc1modified'),
+                SomeClassAudit(id=sc.id, name='sc1modified', data='sc1modified2'),
+            ],
+            pick=('id', 'name', 'data')
+        )
+
 
     def test_relationship(self):
         class SomeClass(Auditable, self.Base, ComparableEntity):
@@ -563,4 +523,3 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
             ],
             pick=('id', 'desc', 'audit_isdelete')
         )
-
