@@ -8,7 +8,7 @@ from .reservation import Base, Session
 
 
 class DbTestCase(unittest.TestCase):
-  engine = create_engine('sqlite:///test.db', echo=True)
+  engine = create_engine('sqlite://', echo=True)
 
   def setUp(self):
     super(DbTestCase, self).setUp()

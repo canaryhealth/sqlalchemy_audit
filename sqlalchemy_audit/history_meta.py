@@ -152,6 +152,7 @@ def create_record(obj, session, new=False, deleted=False):
     obj_state = attributes.instance_state(obj)
 
     attr = {}
+    obj_changed = False
 
     for om, am in zip(obj_mapper.iterate_to_root(),
                       audit_mapper.iterate_to_root()):
@@ -184,11 +185,35 @@ def create_record(obj, session, new=False, deleted=False):
             if prop.key not in obj_state.dict:
                 getattr(obj, prop.key)
 
+            # mark whether if attribute was changed
+            a, u, d = attributes.get_history(obj, prop.key)
+            if not u:
+                obj_changed = True
+
             # set audit_copy to None if delete and not primary key
             if deleted and not audit_column.primary_key:
                 attr[audit_column.key] = None
             else:
                 attr[audit_column.key] = getattr(obj, prop.key)
+
+    # if none of the attributes was changed, check relationships
+    if not obj_changed:
+        for prop in obj_mapper.iterate_properties:
+            if isinstance(prop, RelationshipProperty) and \
+                attributes.get_history(
+                    obj, prop.key,
+                    passive=attributes.PASSIVE_NO_INITIALIZE).has_changes():
+                for p in prop.local_columns:
+                    if p.foreign_keys:
+                        obj_changed = True
+                        break
+                if obj_changed is True:
+                    break
+
+    # relationships (backrefs) will create audit records, which we are
+    # suppressing by checking whether the object is changed
+    if not obj_changed and not deleted:
+        return
 
     # create audit record
     audit_copy = audit_cls()

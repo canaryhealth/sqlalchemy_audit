@@ -481,8 +481,6 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
         sess.add(sc1)
         sess.commit()
         sr1 = SomeRelated(desc='sr1', related=sc1)
-        # todo: the backref creates an identical row in the other table even 
-        #       though the other table didn't change, have to suppress
         sess.add(sr1)
         sess.commit()
         sr1.desc = 'sr2'
@@ -506,7 +504,6 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
         self.assertSeqEqual(
             sess.query(SomeClassAudit).order_by(SomeClassAudit.audit_timestamp).all(),
             [
-                SomeClassAudit(id=sc1.id, name='sc1'),
                 SomeClassAudit(id=sc1.id, name='sc1'),
             ],
             pick=('id', 'name')
