@@ -1,5 +1,7 @@
-"""Unit tests illustrating usage of the ``history_meta.py``
-module functions."""
+# -*- coding: utf-8 -*-
+"""
+Unit tests illustrating usage of the ``history_meta.py`` module functions.
+"""
 import morph
 import unittest
 import uuid
@@ -9,8 +11,9 @@ from sqlalchemy import create_engine, Column, Integer, String, \
     ForeignKey, Boolean, select
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import clear_mappers, Session, deferred, relationship, \
-    column_property
+    column_property, backref
 from sqlalchemy.orm import exc as orm_exc
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.testing import AssertsCompiledSQL, eq_, assert_raises
 from sqlalchemy.testing.entities import ComparableEntity
 
@@ -51,8 +54,9 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
     def create_tables(self):
         self.Base.metadata.create_all(engine)
 
-    '''
+
     def test_w_mapper_versioning(self):
+        raise unittest.SkipTest('TODO: validate this test')
         class SomeClass(Auditable, self.Base, ComparableEntity):
             __tablename__ = 'sometable'
 
@@ -80,7 +84,7 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
             orm_exc.StaleDataError,
             s2.flush
         )
-    '''
+
 
     def test_deferred(self):
         class SomeClass(Auditable, self.Base, ComparableEntity):
@@ -519,4 +523,130 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
                                  audit_isdelete=True),
             ],
             pick=('id', 'desc', 'audit_isdelete')
+        )
+
+
+    def test_association_object(self):
+        raise unittest.SkipTest('TODO: get association object to work')
+        class User(Auditable, self.Base, ComparableEntity):
+            __tablename__ = 'usertable'
+            id = Column(Integer, primary_key=True)
+            name = Column(String)
+            keywords = association_proxy(
+                'user_keywords', 'keywordz')
+                #creator=lambda keyword: UserKeyword(keyword=keyword))
+
+        class Keyword(Auditable, self.Base, ComparableEntity):
+            __tablename__ = 'keywordtable'
+            id = Column(Integer, primary_key=True)
+            word = Column(String)
+            #users = association_proxy(
+                #'keyword_users', 'userz')
+                #creator=lambda user: UserKeyword(user=user))
+
+        class UserKeyword(Auditable, self.Base, ComparableEntity):
+            __tablename__ = 'userkeywordtable'
+            user_id = Column(Integer, ForeignKey('usertable.id'),
+                             primary_key=True)
+            keyword_id = Column(Integer, ForeignKey('keywordtable.id'),
+                                primary_key=True)
+            userz = relationship(
+                'User', 
+                backref=backref('user_keywords', cascade='all, delete-orphan'))
+            keywordz = relationship('Keyword')
+            #keywordz = relationship(
+            #    'Keyword',
+            #    backref=backref('keyword_users', cascade='all, delete-orphan'))
+
+            def __init__(self, keywordz=None, userz=None):
+                self.userz = userz
+                self.keywordz = keywordz
+
+        UserAudit = User.__audit_mapper__.class_
+        KeywordAudit = Keyword.__audit_mapper__.class_
+        UserKeywordAudit = UserKeyword.__audit_mapper__.class_
+
+        self.create_tables()
+        sess = self.session
+        
+        boo = Keyword(id=1, word='boo')
+        hoo = Keyword(id=2, word='hoo')
+        steve = User(id=1, name='steve')
+        sess.add(boo)
+        sess.add(hoo)
+        sess.add(steve)
+        sess.commit()
+        steve.keywords.append(boo)
+        steve.keywords.append(hoo)
+        sess.commit()
+        allan = User(id=2, name='allan')
+        allan.keywords = [boo]
+        sess.add(allan)
+        sess.commit()
+        allan.keywords.append(hoo)
+        sess.commit()
+        boo.word = 'boos'
+        sess.commit()
+        allan.keywords.remove(boo)
+        sess.commit()
+        
+        # assert source tables
+        self.assertSeqEqual(
+            sess.query(User).all(),
+            [steve, allan],
+            pick=('name')
+        )
+        self.assertSeqEqual(
+            sess.query(Keyword).all(),
+            [boo, hoo],
+            pick=('word')
+        )
+        self.assertSeqEqual(
+            sess.query(UserKeyword).all(),
+            [ 
+                sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==boo.id).one(),
+                sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==hoo.id).one(),
+                sess.query(UserKeyword).filter(UserKeyword.user_id==allan.id, UserKeyword.keyword_id==hoo.id).one(),
+            ],
+            pick=('user_id', 'keyword_id')
+        )
+
+        # assert audit tables
+        self.assertSeqEqual(
+            sess.query(UserAudit).order_by(UserAudit.audit_timestamp).all(),
+            [
+                UserAudit(id=steve.id, name='steve'),
+                UserAudit(id=allan.id, name='allan'),
+            ],
+            pick=('id', 'name')
+        )
+        self.assertSeqEqual(
+            sess.query(KeywordAudit).order_by(KeywordAudit.audit_timestamp).all(),
+            [
+                KeywordAudit(id=boo.id, word='boo'),
+                KeywordAudit(id=hoo.id, word='hoo'),
+                KeywordAudit(id=boo.id, word='boos'),
+            ],
+            pick=('id', 'word')
+        )
+        self.assertSeqEqual(
+            sess.query(UserKeywordAudit).order_by(UserKeywordAudit.audit_timestamp).all(),
+            [
+                sess.query(UserKeywordAudit).filter(
+                    UserKeywordAudit.user_id==steve.id, 
+                    UserKeywordAudit.keyword_id==boo.id).first(),
+                sess.query(UserKeywordAudit).filter(
+                    UserKeywordAudit.user_id==steve.id, 
+                    UserKeywordAudit.keyword_id==hoo.id).first(),
+                sess.query(UserKeywordAudit).filter(
+                    UserKeywordAudit.user_id==allan.id, 
+                    UserKeywordAudit.keyword_id==boo.id).first(),
+                sess.query(UserKeywordAudit).filter(
+                    UserKeywordAudit.user_id==allan.id, 
+                    UserKeywordAudit.keyword_id==hoo.id).first(),
+                sess.query(UserKeywordAudit).filter(
+                    UserKeywordAudit.user_id==allan.id, 
+                    UserKeywordAudit.keyword_id==hoo.id).first(),
+            ],
+            pick=('user_id', 'keyword_id')
         )
