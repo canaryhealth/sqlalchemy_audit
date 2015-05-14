@@ -1,4 +1,7 @@
-"""Auditable mixin class and other utilities."""
+# -*- coding: utf-8 -*-
+"""
+Auditable mixin class and other utilities.
+"""
 import time
 import uuid
 
@@ -48,11 +51,14 @@ def _audit_mapper(local_mapper):
         #   - UTC timestamp of when the audit row was created
         #   - boolean flag to identify that this record has since been deleted
         audit_cols.append(Column('audit_rec_id', String, primary_key=True,
+                                 nullable=False,
                                  default=lambda:str(uuid.uuid4()), 
                                  info=audit_meta))
         audit_cols.append(Column('audit_timestamp', Float, default=time.time,
+                                 nullable=False,
                                  info=audit_meta))
         audit_cols.append(Column('audit_isdelete', Boolean, default=False,
+                                 nullable=False,
                                  info=audit_meta))
 
         for column in local_mapper.local_table.c:
