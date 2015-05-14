@@ -218,3 +218,52 @@ class TestAuditable(DbTestCase):
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'audit_isdelete')
     )
+
+
+  def test_flushes(self):
+    # insert
+    reservation = Reservation(name='Me', 
+                              date=datetime.date(2015, 4, 13), 
+                              time=datetime.time(19, 00), party=10)
+    self.session.add(reservation)
+    self.session.flush()
+    # update
+    reservation.date = datetime.date(2015, 4, 15)
+    reservation.time = datetime.time(19, 30)
+    reservation.party = 15
+    self.session.flush()
+    reservation.date = datetime.date(2015, 5, 15)
+    reservation.time = datetime.time(19, 15)
+    reservation.party = 11
+    self.session.flush()
+    self.session.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      self.session.query(Reservation).all(),
+      [ Reservation(id=reservation.id, name='Me',
+                    date=datetime.date(2015, 5, 15), 
+                    time=datetime.time(19, 15),
+                    party=11)
+      ],
+      pick=('id', 'name', 'date', 'time', 'party')
+    )
+    
+    # assert audit records
+    self.assertSeqEqual(
+      self.session.query(ReservationAudit).order_by('audit_timestamp').all(),
+      [ ReservationAudit(id=reservation.id, name='Me',
+                         date=datetime.date(2015, 4, 13), 
+                         time=datetime.time(19, 00),
+                         party=10, audit_isdelete=False),
+        ReservationAudit(id=reservation.id, name='Me',
+                         date=datetime.date(2015, 4, 15),
+                         time=datetime.time(19, 30),
+                         party=15, audit_isdelete=False),
+        ReservationAudit(id=reservation.id, name='Me',
+                         date=datetime.date(2015, 5, 15),
+                         time=datetime.time(19, 15),
+                         party=11, audit_isdelete=False),
+      ],
+      pick=('id', 'name', 'date', 'time', 'party', 'audit_isdelete')
+    )
