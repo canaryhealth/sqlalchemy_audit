@@ -51,10 +51,10 @@ class Auditable(object):
     else:
       # todo: is there a better way to copy this?
       for c in target.__table__.c:
-        if c.name is not 'rev_id':
+        if c.name not in ('rev_id', 'created'):
           attr[c.name] = getattr(target, c.name)
-      rev = target.__rev_class__(**attr)
-      Auditable.DBSession.add(rev)
+    rev = target.__rev_class__(**attr)
+    Auditable.DBSession.add(rev)
 
 
   @classmethod
@@ -79,16 +79,20 @@ class Auditable(object):
       col = col.copy()
       col.nullable = True
       col.unique = False
+      col.primary_key = False
       col.foreign_keys = []
       col.default = col.server_default = None
+      # todo: feels a bit hard-coded
+      if col.name == 'rev_id':
+        col.primary_key = True
       return col
 
-    rev_cols = []
     properties = sa.util.OrderedDict()
+    rev_cols = []
+    rev_cols.append(
+      sa.Column('isdelete', sa.Boolean, default=False, nullable=False))
     for column in cls.__mapper__.local_table.c:
       rev_cols.append(_col_copy(column))
-      rev_cols.append(
-        sa.Column('isdelete', sa.Boolean, default=False, nullable=False))
 
     table = sa.Table(
       cls.__mapper__.local_table.name + '_rev',
@@ -107,11 +111,9 @@ class Auditable(object):
     rev_cls.__mapper__ = mapper
     cls.__rev_class__ = rev_cls
 
-
   @classmethod
   def auditable_session(cls, session):
     cls.DBSession = session
-
 
 #------------------------------------------------------------------------------
 # end of $Id$
