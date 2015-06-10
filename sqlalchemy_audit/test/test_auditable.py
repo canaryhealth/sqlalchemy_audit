@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import datetime
+import time
 import unittest
+import uuid
 
 import sqlalchemy as sa
 from canary.model.util import RestrictingForeignKey
@@ -20,11 +22,6 @@ class TestAuditable(DbTestCase):
 
   def test_schema(self):
     raise unittest.SkipTest('TODO')
-    class B(Base):
-      __tablename__ = 'b'
-      id = sa.Column(sa.String, primary_key=True)
-      name = sa.Column(sa.String)
-
     class A(Auditable, Base):
       __tablename__ = 'a'
       id = sa.Column(sa.String, primary_key=True)
@@ -32,6 +29,11 @@ class TestAuditable(DbTestCase):
       created = sa.Column(sa.Float, nullable=False)
       name = sa.Column(sa.String, default='a', nullable=False)
       b_id = sa.Column(sa.String, RestrictingForeignKey('b.id'), nullable=False)
+
+    class B(Base):
+      __tablename__ = 'b'
+      id = sa.Column(sa.String, primary_key=True)
+      name = sa.Column(sa.String)
 
     A.broadcast_crud()
     self.create_tables()
@@ -329,4 +331,154 @@ class TestAuditable(DbTestCase):
                          party=None, isdelete=True),
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+    )
+
+
+
+  def test_relationship(self):
+    class SomeClass(Auditable, Base):
+      __tablename__ = 'someclass'
+      id = sa.Column(sa.String, primary_key=True)
+      created = sa.Column(sa.Float, default=time.time, nullable=False)
+      rev_id = sa.Column(sa.String, nullable=False)
+      name = sa.Column(sa.String)
+      related_id = sa.Column(sa.Integer, sa.ForeignKey('somerelated.id'))
+      related = sa.orm.relationship("SomeRelated", backref='classes')
+      def __init__(self, *args, **kwargs):
+        super(SomeClass, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.rev_id = str(uuid.uuid4())
+
+    class SomeRelated(Auditable, Base):
+      __tablename__ = 'somerelated'
+      id = sa.Column(sa.String, primary_key=True)
+      created = sa.Column(sa.Float, default=time.time, nullable=False)
+      rev_id = sa.Column(sa.String, nullable=False)
+      desc = sa.Column(sa.String)
+      def __init__(self, *args, **kwargs):
+        super(SomeRelated, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.rev_id = str(uuid.uuid4())
+
+    SomeClass.broadcast_crud()
+    SomeClassRev = SomeClass.__rev_class__
+    SomeRelated.broadcast_crud()
+    SomeRelatedRev = SomeRelated.__rev_class__
+    self.create_tables()
+
+    sess = self.session
+    sc1 = SomeClass(name='sc1')
+    sess.add(sc1)
+    sess.commit()
+    sr1 = SomeRelated(desc='sr1')
+    sc1.related = sr1
+    sess.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      self.session.query(SomeClass).all(),
+      [sc1],
+      pick=('id', 'name')
+    )
+    self.assertSeqEqual(
+      self.session.query(SomeRelated).all(),
+      [sr1],
+      pick=('id', 'desc')
+    )
+    # assert revisions
+    self.assertSeqEqual(
+      sess.query(SomeClassRev).order_by(SomeClassRev.created).all(),
+      [
+        SomeClassRev(id=sc1.id, name='sc1', related_id=None),
+        SomeClassRev(id=sc1.id, name='sc1', related_id=sr1.id),
+      ],
+      pick=('id', 'name', 'related_id')
+    )
+    self.assertSeqEqual(
+      sess.query(SomeRelatedRev).order_by(SomeRelatedRev.created).all(),
+      [
+        SomeRelatedRev(id=sr1.id, desc='sr1')
+      ],
+      pick=('id', 'desc')
+    )
+
+
+
+  def test_backref_relationship(self):
+    raise unittest.SkipTest('unpollute Base.metadata')
+    class SomeClass(Auditable, Base):
+      __tablename__ = 'someclass'
+      id = sa.Column(sa.String, primary_key=True)
+      created = sa.Column(sa.Float, default=time.time, nullable=False)
+      rev_id = sa.Column(sa.String, nullable=False)
+      name = sa.Column(sa.String)
+      def __init__(self, *args, **kwargs):
+        super(SomeClass, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.rev_id = str(uuid.uuid4())
+
+    class SomeRelated(Auditable, Base):
+      __tablename__ = 'somerelated'
+      id = sa.Column(sa.String, primary_key=True)
+      created = sa.Column(sa.Float, default=time.time, nullable=False)
+      rev_id = sa.Column(sa.String, nullable=False)
+      desc = sa.Column(sa.String)
+      related_id = sa.Column(sa.Integer, sa.ForeignKey('someclass.id'))
+      related = sa.orm.relationship("SomeClass", backref='related')
+      def __init__(self, *args, **kwargs):
+        super(SomeRelated, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.rev_id = str(uuid.uuid4())
+
+    SomeClass.broadcast_crud()
+    SomeClassRev = SomeClass.__rev_class__
+    SomeRelated.broadcast_crud()
+    SomeRelatedRev = SomeRelated.__rev_class__
+    self.create_tables()
+
+    sess = self.session
+    sc1 = SomeClass(name='sc1')
+    sess.add(sc1)
+    sess.commit()
+    sr1 = SomeRelated(desc='sr1', related=sc1)
+    sess.add(sr1)
+    sess.commit()
+    sr1.desc = 'sr2'
+    sess.commit()
+    sess.delete(sr1)
+    sess.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      self.session.query(SomeClass).all(),
+      [sc1],
+      pick=('id', 'name')
+    )
+    self.assertSeqEqual(
+      self.session.query(SomeRelated).all(),
+      [],
+      pick=('id', 'desc')
+    )
+    # assert revisions
+    self.assertSeqEqual(
+      sess.query(SomeClassRev).order_by(SomeClassRev.created).all(),
+      [
+        # todo: there are two b/c the relationship assignment does not
+        #       consider whether the fields were changed.
+        SomeClassRev(id=sc1.id, name='sc1'),
+        SomeClassRev(id=sc1.id, name='sc1'),
+      ],
+      pick=('id', 'name')
+    )
+    self.assertSeqEqual(
+      sess.query(SomeRelatedRev).order_by(SomeRelatedRev.created).all(),
+      [
+        SomeRelatedRev(id=sr1.id, desc='sr1', related_id=sc1.id,
+                       isdelete=False),
+        SomeRelatedRev(id=sr1.id, desc='sr2', related_id=sc1.id,
+                       isdelete=False),
+        SomeRelatedRev(id=sr1.id, desc=None, related_id=None,
+                       isdelete=True),
+      ],
+      pick=('id', 'desc', 'isdelete')
     )
