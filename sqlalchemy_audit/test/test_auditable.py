@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 import datetime
+import unittest
+
+import sqlalchemy as sa
+from canary.model.util import RestrictingForeignKey
 
 from . import DbTestCase
-from .reservation import Reservation
+from .reservation import Reservation, Base
+from ..auditable import Auditable
 
 ReservationAudit = Reservation.__rev_class__
 
@@ -10,6 +15,49 @@ ReservationAudit = Reservation.__rev_class__
 class TestAuditable(DbTestCase):
   def list_comp(self, seq, attr):
     return [ getattr(x, 'rev_id') for x in seq ]
+
+
+
+  def test_schema(self):
+    raise unittest.SkipTest('TODO')
+    class B(Base):
+      __tablename__ = 'b'
+      id = sa.Column(sa.String, primary_key=True)
+      name = sa.Column(sa.String)
+
+    class A(Auditable, Base):
+      __tablename__ = 'a'
+      id = sa.Column(sa.String, primary_key=True)
+      rev_id = sa.Column(sa.String, nullable=False)
+      created = sa.Column(sa.Float, nullable=False)
+      name = sa.Column(sa.String, default='a', nullable=False)
+      b_id = sa.Column(sa.String, RestrictingForeignKey('b.id'), nullable=False)
+
+    A.broadcast_crud()
+    self.create_tables()
+
+    result = A.__rev_class__.__table__
+    expected = sa.Table(
+      'a_rev_prime', Base.metadata,
+      sa.Column('isdelete', sa.Boolean, default=False, nullable=False),
+      sa.Column('id', sa.String, nullable=True),
+      sa.Column('rev_id', sa.String, primary_key=True),
+      sa.Column('created', sa.Float, nullable=True),
+      sa.Column('name', sa.String, default=None, nullable=True),
+      sa.Column('b_id', sa.String, nullable=True)
+    )
+
+    for col in ('isdelete', 'id', 'rev_id', 'created', 'name', 'b_id'):
+      for prop in ('name', 'type', 'default', 'primary_key', 'nullable', 
+                   'foreign_keys'):
+        pass
+        # todo: how do i compare their values...
+        # print col + '.' + prop
+        # print getattr(getattr(result.c, col), prop) 
+        # print getattr(getattr(expected.c, col), prop)
+        # print '----------'
+
+     #import pdb; pdb.set_trace()
 
 
 
@@ -250,50 +298,35 @@ class TestAuditable(DbTestCase):
 
 
 
-  # def test_flushes(self):
-  #   # insert
-  #   reservation = Reservation(name='Me', 
-  #                             date=datetime.date(2015, 4, 13), 
-  #                             time=datetime.time(19, 00), party=10)
-  #   self.session.add(reservation)
-  #   self.session.flush()
-  #   # update
-  #   reservation.date = datetime.date(2015, 4, 15)
-  #   reservation.time = datetime.time(19, 30)
-  #   reservation.party = 15
-  #   self.session.flush()
-  #   reservation.date = datetime.date(2015, 5, 15)
-  #   reservation.time = datetime.time(19, 15)
-  #   reservation.party = 11
-  #   self.session.flush()
-  #   self.session.commit()
+  def test_flushes(self):
+    # insert
+    reservation = Reservation(name='Me', 
+                              date=datetime.date(2015, 4, 13), 
+                              time=datetime.time(19, 00), party=10)
+    self.session.add(reservation)
+    # update
+    reservation.date = datetime.date(2015, 4, 15)
+    reservation.time = datetime.time(19, 30)
+    reservation.party = 15
+    self.session.flush()
+    reservation.date = datetime.date(2015, 5, 15)
+    reservation.time = datetime.time(19, 15)
+    reservation.party = 11
+    self.session.delete(reservation)
+    self.session.commit()
 
-  #   # assert source
-  #   self.assertSeqEqual(
-  #     self.session.query(Reservation).all(),
-  #     [ Reservation(id=reservation.id, name='Me',
-  #                   date=datetime.date(2015, 5, 15), 
-  #                   time=datetime.time(19, 15),
-  #                   party=11)
-  #     ],
-  #     pick=('id', 'name', 'date', 'time', 'party')
-  #   )
-    
-  #   # assert revisions
-  #   self.assertSeqEqual(
-  #     self.session.query(ReservationAudit).order_by('created').all(),
-  #     [ ReservationAudit(id=reservation.id, name='Me',
-  #                        date=datetime.date(2015, 4, 13), 
-  #                        time=datetime.time(19, 00),
-  #                        party=10, isdelete=False),
-  #       ReservationAudit(id=reservation.id, name='Me',
-  #                        date=datetime.date(2015, 4, 15),
-  #                        time=datetime.time(19, 30),
-  #                        party=15, isdelete=False),
-  #       ReservationAudit(id=reservation.id, name='Me',
-  #                        date=datetime.date(2015, 5, 15),
-  #                        time=datetime.time(19, 15),
-  #                        party=11, isdelete=False),
-  #     ],
-  #     pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
-  #   )
+    # assert source
+    self.assertEqual(self.session.query(Reservation).all(), [])   
+    # assert revisions
+    self.assertSeqEqual(
+      self.session.query(ReservationAudit).order_by('created').all(),
+      [ ReservationAudit(id=reservation.id, name='Me',
+                         date=datetime.date(2015, 4, 15),
+                         time=datetime.time(19, 30),
+                         party=15, isdelete=False),
+        ReservationAudit(id=reservation.id, name=None,
+                         date=None, time=None, 
+                         party=None, isdelete=True),
+      ],
+      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+    )

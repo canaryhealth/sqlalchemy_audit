@@ -9,7 +9,7 @@ from .reservation import Base, Session
 
 
 class DbTestCase(unittest.TestCase):
-  engine = create_engine('sqlite://', echo=True)
+  engine = create_engine('sqlite://', echo=False)
 
   def setUp(self):
     super(DbTestCase, self).setUp()
@@ -25,6 +25,10 @@ class DbTestCase(unittest.TestCase):
     Base.metadata.drop_all(self.engine)
 
 
+  def create_tables(self):
+    Base.metadata.create_all(self.engine)
+
+
   def assertSeqEqual(self, result, expected, pick=None):
     '''
     Helper method to compare two sequences. If `pick` is specified, then it 
@@ -34,9 +38,9 @@ class DbTestCase(unittest.TestCase):
       result = [morph.pick(item, *morph.tolist(pick)) for item in result]
       expected = [morph.pick(item, *morph.tolist(pick)) for item in expected]
 
-    print '=== result ==='
-    print result
-    print '=== expected ==='
-    print expected
+    # print '=== result ==='
+    # print result
+    # print '=== expected ==='
+    # print expected
 
     self.assertEqual(result, expected, 'the sequences are different')
