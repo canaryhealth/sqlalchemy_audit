@@ -6,6 +6,7 @@
 # copy: (C) Copyright 2014-EOT Canary Health, Inc., All Rights Reserved.
 #------------------------------------------------------------------------------
 import aadict
+import time
 import uuid
 
 import sqlalchemy as sa
@@ -17,6 +18,11 @@ class Auditable(object):
 
   Usage
   -----
+    # Set up DBSession
+    DBSession = ...
+    Auditable.auditable_session(DBSession)
+
+    # Class inherits Auditable and broadcast CRUD events
     class MyClass(Auditable):
       ...
 
@@ -26,6 +32,24 @@ class Auditable(object):
 
   # todo: switch to pub/sub or message broker instead of directly setting 
   #       the handler
+  @staticmethod
+  def before_insert(mapper, connection, target):
+    Auditable.before_db_change(mapper, connection, target, 'insert')
+
+  @staticmethod
+  def before_update(mapper, connection, target):
+    Auditable.before_db_change(mapper, connection, target, 'update')
+
+  @staticmethod
+  def before_delete(mapper, connection, target):
+    Auditable.before_db_change(mapper, connection, target, 'delete')
+
+  @staticmethod
+  def before_db_change(mapper, connection, target, action):
+    # re-roll the rev_id on change
+    if action is not 'insert':
+      target.rev_id = str(uuid.uuid4())
+
   
   @staticmethod
   def after_insert(mapper, connection, target):
@@ -41,17 +65,20 @@ class Auditable(object):
 
   @staticmethod
   def after_db_change(mapper, connection, target, action):
-    # todo: should we do this in a constructor?
+    # todo: should we handle the defaults in a constructor?
     attr = aadict.aadict()
     attr.isdelete = False
-    attr.rev_id = str(uuid.uuid4())
+    attr.id = getattr(target, 'id')
+    attr.rev_id = getattr(target, 'rev_id')
+    attr.created = time.time()
+
     if action == 'delete':
-      attr.id = getattr(target, 'id')
       attr.isdelete = True
+      # skips copying the rest of the fields (hence None)
     else:
       # todo: is there a better way to copy this?
       for c in target.__table__.c:
-        if c.name not in ('rev_id', 'created'):
+        if c.name not in ('id', 'rev_id', 'created'):  # already assigned
           attr[c.name] = getattr(target, c.name)
     rev = target.__rev_class__(**attr)
     Auditable.DBSession.add(rev)
@@ -65,6 +92,9 @@ class Auditable(object):
     Auditable.create_rev_class(cls)
 
     # register listeners
+    sa.event.listen(cls, 'before_insert', cls.before_insert)
+    sa.event.listen(cls, 'before_update', cls.before_update)
+    sa.event.listen(cls, 'before_delete', cls.before_delete)
     sa.event.listen(cls, 'after_insert', cls.after_insert)
     sa.event.listen(cls, 'after_update', cls. after_update)
     sa.event.listen(cls, 'after_delete', cls.after_delete)
