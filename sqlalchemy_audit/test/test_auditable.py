@@ -8,8 +8,8 @@ ReservationAudit = Reservation.__rev_class__
 
 
 class TestAuditable(DbTestCase):
-  def get_rev_ids(self, things):
-    return [ x.rev_id for x in things ]
+  def list_comp(self, seq, attr):
+    return [ getattr(x, 'rev_id') for x in seq ]
 
 
 
@@ -38,8 +38,9 @@ class TestAuditable(DbTestCase):
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
     )
-    # assert rev ids
+    # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[0].rev_id)
+    self.assertNotEqual(reservations[0].created, reservation_revs[0].created)
 
 
 
@@ -90,9 +91,11 @@ class TestAuditable(DbTestCase):
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
     )
-    # assert rev ids
+    # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[2].rev_id)
-    self.assertEqual(len(set(self.get_rev_ids(reservation_revs))), 3)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 3)
+    self.assertNotEqual(reservations[0].created, reservation_revs[2].created)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 3)
 
 
 
@@ -124,7 +127,8 @@ class TestAuditable(DbTestCase):
       pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
     )
     # assert rev ids
-    self.assertEqual(len(set(self.get_rev_ids(reservation_revs))), 2)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 2)
 
 
 
@@ -151,8 +155,9 @@ class TestAuditable(DbTestCase):
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
     )
-    # assert rev ids
+    # assert rev ids and created time
     self.assertEqual(reservations[0].rev_id, reservation_revs[0].rev_id)
+    self.assertNotEqual(reservations[0].created, reservation_revs[0].created)
 
 
 
@@ -192,9 +197,11 @@ class TestAuditable(DbTestCase):
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
     )
-    # assert rev ids
+    # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
-    self.assertEqual(len(set(self.get_rev_ids(reservation_revs))), 2)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
+    self.assertNotEqual(reservations[0].created, reservation_revs[1].created)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 2)
 
 
 
@@ -235,9 +242,11 @@ class TestAuditable(DbTestCase):
       ],
       pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
     )
-    # assert rev ids
+    # assert rev ids and created time
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
-    self.assertEqual(len(set(self.get_rev_ids(reservation_revs))), 2)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
+    self.assertNotEqual(reservations[0].created, reservation_revs[1].created)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 2)
 
 
 
