@@ -482,3 +482,210 @@ class TestAuditable(DbTestCase):
       ],
       pick=('id', 'desc', 'isdelete')
     )
+
+
+
+  def test_association_object(self):
+    #raise unittest.SkipTest('TODO: get association object to work')
+    class User(Auditable, Base):
+      __tablename__ = 'user'
+      id = sa.Column(sa.String, primary_key=True)
+      rev_id = sa.Column(sa.String)
+      created = sa.Column(sa.Float)
+      name = sa.Column(sa.String)
+      keywords = sa.ext.associationproxy.association_proxy(
+        'user_keyword', 'keyword',
+        creator=lambda kw: UserKeyword(keyword=kw))
+      def __init__(self, *args, **kwargs):
+        super(User, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.rev_id = str(uuid.uuid4())
+        self.created = time.time()
+
+    class Keyword(Auditable, Base):
+      __tablename__ = 'keyword'
+      id = sa.Column(sa.String, primary_key=True)
+      rev_id = sa.Column(sa.String)
+      created = sa.Column(sa.Float)
+      word = sa.Column(sa.String)
+      users = sa.ext.associationproxy.association_proxy(
+        'user_keyword', 'user',
+        creator=lambda usr: UserKeyword(user=usr))
+      def __init__(self, *args, **kwargs):
+        super(Keyword, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.rev_id = str(uuid.uuid4())
+        self.created = time.time()
+
+    class UserKeyword(Auditable, Base):
+      __tablename__ = 'user_keyword'
+      id = sa.Column(sa.String, primary_key=True)
+      rev_id = sa.Column(sa.String)
+      created = sa.Column(sa.Float)
+      user_id = sa.Column(sa.String, sa.ForeignKey('user.id'),
+                          primary_key=True)
+      user = sa.orm.relationship(
+        'User', 
+        backref=sa.orm.backref('user_keyword', cascade='all, delete-orphan'))
+      keyword_id = sa.Column(sa.Integer, sa.ForeignKey('keyword.id'),
+                             primary_key=True)
+      keyword = sa.orm.relationship(
+        'Keyword',
+        backref=sa.orm.backref('user_keyword', cascade='all, delete-orphan'))
+      def __init__(self, *args, **kwargs):
+        super(UserKeyword, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.rev_id = str(uuid.uuid4())
+        self.created = time.time()
+
+    User.broadcast_crud()
+    UserRev = User.__rev_class__
+    Keyword.broadcast_crud()
+    KeywordRev = Keyword.__rev_class__
+    UserKeyword.broadcast_crud()
+    UserKeywordRev = UserKeyword.__rev_class__
+    self.create_tables()
+    sess = self.session
+
+    # part a
+    boo = Keyword(word='boo')
+    hoo = Keyword(word='hoo')
+    steve = User(name='steve')
+    allan = User(name='allan')
+    sess.add(boo)
+    sess.add(hoo)
+    sess.add(steve)
+    sess.add(allan)
+    steve.keywords.append(boo)
+    steve.keywords.append(hoo)
+    allan.keywords.append(hoo)
+    sess.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      sess.query(User).all(),
+      [steve, allan], 
+      pick=('name')
+    )
+    self.assertSeqEqual(
+      sess.query(Keyword).all(),
+      [boo, hoo],
+      pick=('word')
+    )
+    self.assertSeqEqual(
+      sess.query(UserKeyword).all(),
+      # todo: need to figure out how to create UserKeyword obj from ids, work around by
+      #       querying for it
+      [ 
+        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==boo.id).one(),
+        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==hoo.id).one(),
+        sess.query(UserKeyword).filter(UserKeyword.user_id==allan.id, UserKeyword.keyword_id==hoo.id).one(),
+      ],
+      pick=('user_id', 'keyword_id')
+    )
+    # assert revisions
+    user_rev_a = [
+      UserRev(id=steve.id, name='steve'),
+      UserRev(id=allan.id, name='allan'),
+    ]
+    kw_rev_a = [
+      KeywordRev(id=boo.id, word='boo'),
+      KeywordRev(id=hoo.id, word='hoo'),
+    ]
+    user_kw_rev_a = [
+      # todo
+      #steve boo
+      #steve hoo
+      #allan hoo
+    ]
+    self.assertSeqEqual(
+      sess.query(UserRev).order_by(UserRev.created).all(),
+      user_rev_a,
+      pick=('id', 'name')
+    )
+    self.assertSeqEqual(
+      sess.query(KeywordRev).order_by(KeywordRev.created).all(),
+      kw_rev_a,
+      pick=('id', 'word')
+    )
+    # todo: assert assoc
+
+
+    # part b
+    allan.keywords.remove(hoo)
+    sess.commit()
+
+    user_rev_b = [
+      UserRev(id=allan.id, name='allan'),
+    ]
+    user_kw_rev_b = [
+      # delete allan hoo
+    ]
+    # assert source
+    self.assertSeqEqual(
+      sess.query(User).all(),
+      [steve, allan], 
+      pick=('name')
+    )
+    self.assertSeqEqual(
+      sess.query(Keyword).all(),
+      [boo, hoo],
+      pick=('word')
+    )
+    # todo: assert assoc
+    self.assertSeqEqual(
+      sess.query(UserKeyword).all(),
+      # todo: need to figure out how to create UserKeyword obj from ids, work around by
+      #       querying for it
+      [ 
+        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==boo.id).one(),
+        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==hoo.id).one(),
+      ],
+      pick=('user_id', 'keyword_id')
+    )
+    # assert revisions
+    self.assertSeqEqual(
+      sess.query(UserRev).order_by(UserRev.created).all(),
+      user_rev_a + user_rev_b,
+      pick=('id', 'name')
+    )
+    self.assertSeqEqual(
+      sess.query(KeywordRev).order_by(KeywordRev.created).all(),
+      kw_rev_a,
+      pick=('id', 'word')
+    )
+    # todo: assert assoc
+
+
+    # part c
+    sess.delete(hoo)
+    sess.commit()
+
+    # assert source
+    self.assertSeqEqual(
+      sess.query(User).all(),
+      [steve, allan], 
+      pick=('name')
+    )
+    self.assertSeqEqual(
+      sess.query(Keyword).all(),
+      [boo],
+      pick=('word')
+    )
+    # todo: assert assoc
+    self.assertSeqEqual(
+      sess.query(UserKeyword).all(),
+      # todo: need to figure out how to create UserKeyword obj from ids, work around by
+      #       querying for it
+      [ 
+        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==boo.id).one(),
+      ],
+      pick=('user_id', 'keyword_id')
+    )
+
+    kw_rev_c = [
+      # delete hoo
+    ]
+    user_kw_rev_c = [
+      # delete steve hoo
+    ]
