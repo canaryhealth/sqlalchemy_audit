@@ -528,35 +528,34 @@ class TestVersioning(unittest.TestCase, AssertsCompiledSQL):
 
     def test_association_object(self):
         raise unittest.SkipTest('TODO: get association object to work')
-        class User(Auditable, self.Base, ComparableEntity):
+        class User(Auditable, self.Base):
             __tablename__ = 'usertable'
             id = Column(Integer, primary_key=True)
             name = Column(String)
             keywords = association_proxy(
-                'user_keywords', 'keywordz')
-                #creator=lambda keyword: UserKeyword(keyword=keyword))
+              'user_keyword', 'keyword',
+              creator=lambda kw: UserKeyword(keyword=kw))
 
-        class Keyword(Auditable, self.Base, ComparableEntity):
+        class Keyword(Auditable, self.Base):
             __tablename__ = 'keywordtable'
             id = Column(Integer, primary_key=True)
             word = Column(String)
-            #users = association_proxy(
-                #'keyword_users', 'userz')
-                #creator=lambda user: UserKeyword(user=user))
+            users = association_proxy(
+              'keyword_user', 'user',
+              creator=lambda usr: UserKeyword(user=usr))
 
         class UserKeyword(Auditable, self.Base, ComparableEntity):
-            __tablename__ = 'userkeywordtable'
+            __tablename__ = 'user_keyword'
             user_id = Column(Integer, ForeignKey('usertable.id'),
                              primary_key=True)
+            user = relationship(
+              'User', 
+              backref=backref('user_keyword', cascade='all, delete-orphan'))
             keyword_id = Column(Integer, ForeignKey('keywordtable.id'),
                                 primary_key=True)
-            userz = relationship(
-                'User', 
-                backref=backref('user_keywords', cascade='all, delete-orphan'))
-            keywordz = relationship('Keyword')
-            #keywordz = relationship(
-            #    'Keyword',
-            #    backref=backref('keyword_users', cascade='all, delete-orphan'))
+            keyword = relationship(
+              'Keyword',
+              backref=backref('user_keyword', cascade='all, delete-orphan'))
 
             def __init__(self, keywordz=None, userz=None):
                 self.userz = userz
