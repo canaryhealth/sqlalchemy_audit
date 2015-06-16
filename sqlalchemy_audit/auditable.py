@@ -113,9 +113,6 @@ class Auditable(object):
       col.primary_key = False
       col.foreign_keys = []
       col.default = col.server_default = None
-      # todo: feels a bit hard-coded
-      if col.name == 'rev_id':
-        col.primary_key = True
       return col
 
     properties = sa.util.OrderedDict()
@@ -129,7 +126,8 @@ class Auditable(object):
     for column in cls.__mapper__.local_table.c:
       # todo: ideally check to see if there are conflicts with the namespaced
       #       cols
-      rev_cols.append(_col_copy(column))
+      if not column.name.startswith('rev_'):
+        rev_cols.append(_col_copy(column))
 
     table = sa.Table(
       cls.__mapper__.local_table.name + '_rev',
