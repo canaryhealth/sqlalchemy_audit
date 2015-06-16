@@ -30,6 +30,8 @@ class Auditable(object):
   '''
   DBSession = None
 
+  rev_id = sa.Column('rev_id', sa.String(36), nullable=False)
+
   # todo: switch to pub/sub or message broker instead of directly setting 
   #       the handler
   @staticmethod
@@ -47,9 +49,8 @@ class Auditable(object):
   @staticmethod
   def before_db_change(mapper, connection, target, action):
     # re-roll the rev_id on change
-    # todo: this dictates the rev_id to be uuids. re-evaluate later
-    if action is not 'insert':
-      target.rev_id = str(uuid.uuid4())
+    # this is needed for insert b/c we don't have init to populate its value
+    target.rev_id = str(uuid.uuid4())
 
   
   @staticmethod
@@ -88,11 +89,6 @@ class Auditable(object):
 
   @classmethod
   def broadcast_crud(cls):
-    # add rev_id to cls
-    # cls.__mapper__.local_table.c.append(
-    #   sa.Column('rev_id', sa.String(36), nullable=False),
-    # )
-
     # create revision class
     Auditable.create_rev_class(cls)
 

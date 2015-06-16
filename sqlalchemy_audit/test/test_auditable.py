@@ -23,7 +23,6 @@ class TestAuditable(DbTestCase):
     class A(Auditable, Base):
       __tablename__ = 'a'
       id = sa.Column(sa.String, primary_key=True)
-      rev_id = sa.Column(sa.String, nullable=False)
       created = sa.Column(sa.Float, nullable=False)
       name = sa.Column(sa.String, default='a', nullable=False)
       b_id = sa.Column(sa.String, RestrictingForeignKey('b.id'), nullable=False)
@@ -353,25 +352,21 @@ class TestAuditable(DbTestCase):
       __tablename__ = 'someclass'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
-      rev_id = sa.Column(sa.String, nullable=False)
       name = sa.Column(sa.String)
       related_id = sa.Column(sa.Integer, sa.ForeignKey('somerelated.id'))
       related = sa.orm.relationship("SomeRelated", backref='classes')
       def __init__(self, *args, **kwargs):
         super(SomeClass, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.rev_id = str(uuid.uuid4())
 
     class SomeRelated(Auditable, Base):
       __tablename__ = 'somerelated'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
-      rev_id = sa.Column(sa.String, nullable=False)
       desc = sa.Column(sa.String)
       def __init__(self, *args, **kwargs):
         super(SomeRelated, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.rev_id = str(uuid.uuid4())
 
     SomeClass.broadcast_crud()
     SomeClassRev = SomeClass.Revision
@@ -423,25 +418,21 @@ class TestAuditable(DbTestCase):
       __tablename__ = 'someclass'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
-      rev_id = sa.Column(sa.String, nullable=False)
       name = sa.Column(sa.String)
       def __init__(self, *args, **kwargs):
         super(SomeClass, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.rev_id = str(uuid.uuid4())
 
     class SomeRelated(Auditable, Base):
       __tablename__ = 'somerelated'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
-      rev_id = sa.Column(sa.String, nullable=False)
       desc = sa.Column(sa.String)
       related_id = sa.Column(sa.Integer, sa.ForeignKey('someclass.id'))
       related = sa.orm.relationship("SomeClass", backref='related')
       def __init__(self, *args, **kwargs):
         super(SomeRelated, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.rev_id = str(uuid.uuid4())
 
     SomeClass.broadcast_crud()
     SomeClassRev = SomeClass.Revision
@@ -503,7 +494,6 @@ class TestAuditable(DbTestCase):
     class User(Auditable, Base):
       __tablename__ = 'user'
       id = sa.Column(sa.String, primary_key=True)
-      rev_id = sa.Column(sa.String)
       created = sa.Column(sa.Float)
       name = sa.Column(sa.String)
       keywords = sa.ext.associationproxy.association_proxy(
@@ -512,13 +502,11 @@ class TestAuditable(DbTestCase):
       def __init__(self, *args, **kwargs):
         super(User, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.rev_id = str(uuid.uuid4())
         self.created = time.time()
 
     class Keyword(Auditable, Base):
       __tablename__ = 'keyword'
       id = sa.Column(sa.String, primary_key=True)
-      rev_id = sa.Column(sa.String)
       created = sa.Column(sa.Float)
       word = sa.Column(sa.String)
       users = sa.ext.associationproxy.association_proxy(
@@ -527,13 +515,11 @@ class TestAuditable(DbTestCase):
       def __init__(self, *args, **kwargs):
         super(Keyword, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.rev_id = str(uuid.uuid4())
         self.created = time.time()
 
     class UserKeyword(Auditable, Base):
       __tablename__ = 'user_keyword'
       id = sa.Column(sa.String, primary_key=True)
-      rev_id = sa.Column(sa.String)
       created = sa.Column(sa.Float)
       user_id = sa.Column(sa.String, sa.ForeignKey('user.id'),
                           primary_key=True)
@@ -548,7 +534,6 @@ class TestAuditable(DbTestCase):
       def __init__(self, *args, **kwargs):
         super(UserKeyword, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
-        self.rev_id = str(uuid.uuid4())
         self.created = time.time()
 
     User.broadcast_crud()
