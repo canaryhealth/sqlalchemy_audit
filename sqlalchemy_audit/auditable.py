@@ -82,7 +82,7 @@ class Auditable(object):
         # skip primary key and namespaced fields (already assigned)
         if not (c.name.startswith('rev_') or c.primary_key is True):
           attr[c.name] = getattr(target, c.name)
-    rev = target.__rev_class__(**attr)
+    rev = target.Revision(**attr)
     Auditable.DBSession.add(rev)
 
 
@@ -150,7 +150,7 @@ class Auditable(object):
     )
     rev_cls.__table__ = table
     rev_cls.__mapper__ = mapper
-    cls.__rev_class__ = rev_cls
+    cls.Revision = rev_cls
 
   @classmethod
   def auditable_session(cls, session):
