@@ -11,7 +11,7 @@ from . import DbTestCase
 from .reservation import Reservation, Base
 from ..auditable import Auditable
 
-ReservationAudit = Reservation.__rev_class__
+ReservationRev = Reservation.__rev_class__
 
 
 class TestAuditable(DbTestCase):
@@ -41,7 +41,7 @@ class TestAuditable(DbTestCase):
     result = A.__rev_class__.__table__
     expected = sa.Table(
       'a_rev_prime', Base.metadata,
-      sa.Column('isdelete', sa.Boolean, default=False, nullable=False),
+      sa.Column('rev_isdelete', sa.Boolean, default=False, nullable=False),
       sa.Column('id', sa.String, nullable=True),
       sa.Column('rev_id', sa.String, primary_key=True),
       sa.Column('created', sa.Float, nullable=True),
@@ -49,7 +49,7 @@ class TestAuditable(DbTestCase):
       sa.Column('b_id', sa.String, nullable=True)
     )
 
-    for col in ('isdelete', 'id', 'rev_id', 'created', 'name', 'b_id'):
+    for col in ('rev_isdelete', 'id', 'rev_id', 'created', 'name', 'b_id'):
       for prop in ('name', 'type', 'default', 'primary_key', 'nullable', 
                    'foreign_keys'):
         pass
@@ -72,25 +72,26 @@ class TestAuditable(DbTestCase):
     self.session.commit()
 
     reservations = self.session.query(Reservation).all()
-    reservation_revs = self.session.query(ReservationAudit).order_by('created').all()
+    reservation_revs = self.session.query(ReservationRev).order_by('rev_created').all()
     # assert source
     self.assertSeqEqual(
       reservations,
       [ reservation ],
-      pick=('id', 'name', 'date', 'time', 'party'))
+      pick=('id', 'created', 'name', 'date', 'time', 'party'))
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
-      [ ReservationAudit(id=reservation.id,  name='Me',
-                         date=datetime.date(2015, 4, 2),
-                         time=datetime.time(8, 25),
-                         party=2, isdelete=False),
+      [ ReservationRev(id=reservation.id,  created=reservation.created,
+                       name='Me',
+                       date=datetime.date(2015, 4, 2),
+                       time=datetime.time(8, 25),
+                       party=2, rev_isdelete=False),
       ],
-      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[0].rev_id)
-    self.assertNotEqual(reservations[0].created, reservation_revs[0].created)
+    self.assertNotEqual(reservations[0].created, reservation_revs[0].rev_created)
 
 
 
@@ -112,40 +113,44 @@ class TestAuditable(DbTestCase):
     self.session.commit()
 
     reservations = self.session.query(Reservation).all()
-    reservation_revs = self.session.query(ReservationAudit).order_by('created').all()
+    reservation_revs = self.session.query(ReservationRev).order_by('rev_created').all()
     # assert source
     self.assertSeqEqual(
       reservations,
-      [ Reservation(id=reservation.id, name='Me',
+      [ Reservation(id=reservation.id, created=reservation.created,
+                    name='Me',
                     date=datetime.date(2015, 5, 15), 
                     time=datetime.time(19, 15),
                     party=11),
       ],
-      pick=('id', 'name', 'date', 'time', 'party')
+      pick=('id', 'created', 'name', 'date', 'time', 'party')
     )
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
-      [ ReservationAudit(id=reservation.id, name='Me',
-                         date=datetime.date(2015, 4, 13), 
-                         time=datetime.time(19, 00),
-                         party=10, isdelete=False),
-        ReservationAudit(id=reservation.id, name='Me',
-                         date=datetime.date(2015, 4, 15),
-                         time=datetime.time(19, 30),
-                         party=15, isdelete=False),
-        ReservationAudit(id=reservation.id, name='Me',
-                         date=datetime.date(2015, 5, 15),
-                         time=datetime.time(19, 15),
-                         party=11, isdelete=False),
+      [ ReservationRev(id=reservation.id, created=reservation.created,
+                       name='Me',
+                       date=datetime.date(2015, 4, 13), 
+                       time=datetime.time(19, 00),
+                       party=10, rev_isdelete=False),
+        ReservationRev(id=reservation.id, created=reservation.created,
+                       name='Me',
+                       date=datetime.date(2015, 4, 15),
+                       time=datetime.time(19, 30),
+                       party=15, rev_isdelete=False),
+        ReservationRev(id=reservation.id, created=reservation.created,
+                       name='Me',
+                       date=datetime.date(2015, 5, 15),
+                       time=datetime.time(19, 15),
+                       party=11, rev_isdelete=False),
       ],
-      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[2].rev_id)
     self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 3)
-    self.assertNotEqual(reservations[0].created, reservation_revs[2].created)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 3)
+    self.assertNotEqual(reservations[0].created, reservation_revs[2].rev_created)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 3)
 
 
 
@@ -160,25 +165,27 @@ class TestAuditable(DbTestCase):
     self.session.delete(reservation)
     self.session.commit()
 
-    reservation_revs = self.session.query(ReservationAudit).order_by('created').all()
+    reservation_revs = self.session.query(ReservationRev).order_by('rev_created').all()
     # assert source
     self.assertEqual(self.session.query(Reservation).all(), [])
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
-      [ ReservationAudit(id=reservation.id, name='Me',
-                         date=datetime.date(2015, 5, 21), 
-                         time=datetime.time(18, 45),
-                         party=6, isdelete=False),
-        ReservationAudit(id=reservation.id, name=None,
-                         date=None, time=None, 
-                         party=None, isdelete=True),
+      [ ReservationRev(id=reservation.id, created=reservation.created,
+                       name='Me',
+                       date=datetime.date(2015, 5, 21), 
+                       time=datetime.time(18, 45),
+                       party=6, rev_isdelete=False),
+        ReservationRev(id=reservation.id, created=None,
+                       name=None,
+                       date=None, time=None, 
+                       party=None, rev_isdelete=True),
       ],
-      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
     # assert rev ids
     self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 2)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 2)
 
 
 
@@ -190,24 +197,25 @@ class TestAuditable(DbTestCase):
     self.session.commit()
 
     reservations = self.session.query(Reservation).all()
-    reservation_revs = self.session.query(ReservationAudit).order_by('created').all()
+    reservation_revs = self.session.query(ReservationRev).order_by('rev_created').all()
     # assert source
     self.assertSeqEqual(
       reservations,
       [ reservation ],
-      pick=('id', 'name', 'date', 'time', 'party'))
+      pick=('id', 'created', 'name', 'date', 'time', 'party'))
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
-      [ ReservationAudit(id=reservation.id,  name=None,
-                         date=None, time=None, party=None,
-                         isdelete=False),
+      [ ReservationRev(id=reservation.id, created=reservation.created,
+                       name=None,
+                       date=None, time=None, party=None,
+                       rev_isdelete=False),
       ],
-      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
     # assert rev ids and created time
     self.assertEqual(reservations[0].rev_id, reservation_revs[0].rev_id)
-    self.assertNotEqual(reservations[0].created, reservation_revs[0].created)
+    self.assertNotEqual(reservations[0].created, reservation_revs[0].rev_created)
 
 
 
@@ -223,35 +231,38 @@ class TestAuditable(DbTestCase):
     self.session.commit()
 
     reservations = self.session.query(Reservation).all()
-    reservation_revs = self.session.query(ReservationAudit).order_by('created').all()
+    reservation_revs = self.session.query(ReservationRev).order_by('rev_created').all()
     # assert source
     self.assertSeqEqual(
       reservations,
-      [ Reservation(id=reservation.id, name=None,
+      [ Reservation(id=reservation.id, created=reservation.created,
+                    name=None,
                     date=datetime.date(2015, 5, 15), 
                     time=datetime.time(19, 15),
                     party=11)
       ],
-      pick=('id', 'name', 'date', 'time', 'party')
+      pick=('id', 'created', 'name', 'date', 'time', 'party')
     )
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
-      [ ReservationAudit(id=reservation.id, name=None, 
-                         date=None, time=None, party=None,
-                         isdelete=False),
-        ReservationAudit(id=reservation.id, name=None,
-                         date=datetime.date(2015, 5, 15),
-                         time=datetime.time(19, 15),
-                         party=11, isdelete=False),
+      [ ReservationRev(id=reservation.id, created=reservation.created,
+                       name=None, 
+                       date=None, time=None, party=None,
+                       rev_isdelete=False),
+        ReservationRev(id=reservation.id, created=reservation.created,
+                       name=None,
+                       date=datetime.date(2015, 5, 15),
+                       time=datetime.time(19, 15),
+                       party=11, rev_isdelete=False),
       ],
-      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
     self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
-    self.assertNotEqual(reservations[0].created, reservation_revs[1].created)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 2)
+    self.assertNotEqual(reservations[0].created, reservation_revs[1].rev_created)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 2)
 
 
 
@@ -269,34 +280,37 @@ class TestAuditable(DbTestCase):
     self.session.commit()
 
     reservations = self.session.query(Reservation).all()
-    reservation_revs = self.session.query(ReservationAudit).order_by('created').all()
+    reservation_revs = self.session.query(ReservationRev).order_by('rev_created').all()
     # assert source
     self.assertSeqEqual(
       reservations,
-      [ Reservation(id=reservation.id, name=None,
+      [ Reservation(id=reservation.id, created=reservation.created,
+                    name=None,
                     date=None, time=None, party=None)
       ],
-      pick=('id', 'name', 'date', 'time', 'party')
+      pick=('id', 'created', 'name', 'date', 'time', 'party')
     )
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
-      [ ReservationAudit(id=reservation.id, name=None,
-                         date=datetime.date(2015, 5, 15),
-                         time=datetime.time(19, 15),
-                         party=11, isdelete=False),
-        ReservationAudit(id=reservation.id, name=None, 
-                         date=None, time=None, party=None,
-                         isdelete=False),
+      [ ReservationRev(id=reservation.id, created=reservation.created,
+                       name=None,
+                       date=datetime.date(2015, 5, 15),
+                       time=datetime.time(19, 15),
+                       party=11, rev_isdelete=False),
+        ReservationRev(id=reservation.id, created=reservation.created,
+                       name=None, 
+                       date=None, time=None, party=None,
+                       rev_isdelete=False),
         
       ],
-      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
     # assert rev ids and created time
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
     self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
-    self.assertNotEqual(reservations[0].created, reservation_revs[1].created)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'created'))), 2)
+    self.assertNotEqual(reservations[0].created, reservation_revs[1].rev_created)
+    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 2)
 
 
 
@@ -321,16 +335,18 @@ class TestAuditable(DbTestCase):
     self.assertEqual(self.session.query(Reservation).all(), [])   
     # assert revisions
     self.assertSeqEqual(
-      self.session.query(ReservationAudit).order_by('created').all(),
-      [ ReservationAudit(id=reservation.id, name='Me',
-                         date=datetime.date(2015, 4, 15),
-                         time=datetime.time(19, 30),
-                         party=15, isdelete=False),
-        ReservationAudit(id=reservation.id, name=None,
-                         date=None, time=None, 
-                         party=None, isdelete=True),
+      self.session.query(ReservationRev).order_by('rev_created').all(),
+      [ ReservationRev(id=reservation.id, created=reservation.created,
+                       name='Me',
+                       date=datetime.date(2015, 4, 15),
+                       time=datetime.time(19, 30),
+                       party=15, rev_isdelete=False),
+        ReservationRev(id=reservation.id, created=None,
+                       name=None,
+                       date=None, time=None, 
+                       party=None, rev_isdelete=True),
       ],
-      pick=('id', 'name', 'date', 'time', 'party', 'isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
 
 
@@ -474,19 +490,19 @@ class TestAuditable(DbTestCase):
       sess.query(SomeRelatedRev).order_by(SomeRelatedRev.created).all(),
       [
         SomeRelatedRev(id=sr1.id, desc='sr1', related_id=sc1.id,
-                       isdelete=False),
+                       rev_isdelete=False),
         SomeRelatedRev(id=sr1.id, desc='sr2', related_id=sc1.id,
-                       isdelete=False),
+                       rev_isdelete=False),
         SomeRelatedRev(id=sr1.id, desc=None, related_id=None,
-                       isdelete=True),
+                       rev_isdelete=True),
       ],
-      pick=('id', 'desc', 'isdelete')
+      pick=('id', 'desc', 'rev_isdelete')
     )
 
 
 
   def test_association_object(self):
-    #raise unittest.SkipTest('TODO: get association object to work')
+    raise unittest.SkipTest('TODO: get association object to work')
     class User(Auditable, Base):
       __tablename__ = 'user'
       id = sa.Column(sa.String, primary_key=True)

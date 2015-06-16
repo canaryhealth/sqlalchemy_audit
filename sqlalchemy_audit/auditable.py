@@ -26,7 +26,7 @@ class Auditable(object):
     class MyClass(Auditable):
       ...
 
-    MyClass.broadcast_crud()  
+    MyClass.broadcast_crud()
   '''
   DBSession = None
 
@@ -47,6 +47,7 @@ class Auditable(object):
   @staticmethod
   def before_db_change(mapper, connection, target, action):
     # re-roll the rev_id on change
+    # todo: this dictates the rev_id to be uuids. re-evaluate later
     if action is not 'insert':
       target.rev_id = str(uuid.uuid4())
 
@@ -67,18 +68,19 @@ class Auditable(object):
   def after_db_change(mapper, connection, target, action):
     # todo: should we handle the defaults in a constructor?
     attr = aadict.aadict()
-    attr.isdelete = False
-    attr.id = getattr(target, 'id')
     attr.rev_id = getattr(target, 'rev_id')
-    attr.created = time.time()
+    attr.rev_created = time.time()
+    attr.rev_isdelete = False
+    attr.id = getattr(target, 'id')  # change this to work with any PK
 
     if action == 'delete':
-      attr.isdelete = True
+      attr.rev_isdelete = True
       # skips copying the rest of the fields (hence None)
     else:
       # todo: is there a better way to copy this?
       for c in target.__table__.c:
-        if c.name not in ('id', 'rev_id', 'created'):  # already assigned
+        # skip primary key and namespaced fields (already assigned)
+        if not (c.name.startswith('rev_') or c.primary_key is True):
           attr[c.name] = getattr(target, c.name)
     rev = target.__rev_class__(**attr)
     Auditable.DBSession.add(rev)
@@ -86,7 +88,10 @@ class Auditable(object):
 
   @classmethod
   def broadcast_crud(cls):
-    # todo: add rev_id to cls automatically
+    # add rev_id to cls
+    # cls.__mapper__.local_table.c.append(
+    #   sa.Column('rev_id', sa.String(36), nullable=False),
+    # )
 
     # create revision class
     Auditable.create_rev_class(cls)
@@ -120,8 +125,14 @@ class Auditable(object):
     properties = sa.util.OrderedDict()
     rev_cols = []
     rev_cols.append(
-      sa.Column('isdelete', sa.Boolean, default=False, nullable=False))
+      sa.Column('rev_id', sa.String(36), nullable=False, primary_key=True))
+    rev_cols.append(
+      sa.Column('rev_created', sa.Float, nullable=False))
+    rev_cols.append(
+      sa.Column('rev_isdelete', sa.Boolean, nullable=False, default=False))
     for column in cls.__mapper__.local_table.c:
+      # todo: ideally check to see if there are conflicts with the namespaced
+      #       cols
       rev_cols.append(_col_copy(column))
 
     table = sa.Table(
