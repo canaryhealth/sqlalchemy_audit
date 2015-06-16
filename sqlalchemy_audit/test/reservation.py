@@ -8,14 +8,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.declarative.base import _declarative_constructor as SaInit
 from sqlalchemy.orm import sessionmaker
 
-from ..auditable import Auditable
+from ..versioned import Versioned
 
 
 Base = declarative_base()
 Session = sessionmaker()
 
 
-class Reservation(Auditable, Base):
+class Reservation(Versioned, Base):
   __tablename__ = 'reservations'
   id = Column(String, primary_key=True)
   created = Column(Float, nullable=False)

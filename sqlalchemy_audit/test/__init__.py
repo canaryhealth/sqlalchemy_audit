@@ -4,7 +4,7 @@ import unittest
 
 from sqlalchemy import create_engine
 
-from ..auditable import Auditable
+from ..versioned import Versioned
 from .reservation import Base, Session
 
 
@@ -16,7 +16,7 @@ class DbTestCase(unittest.TestCase):
     Base.metadata.create_all(self.engine)
     Session.configure(bind=self.engine)
     self.session = Session()
-    Auditable.auditable_session(self.session)
+    Versioned.versioned_session(self.session)
 
 
   def tearDown(self):

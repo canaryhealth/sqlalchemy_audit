@@ -9,10 +9,10 @@ from canary.model.util import RestrictingForeignKey
 
 from . import DbTestCase
 from .reservation import Reservation, Base
-from ..auditable import Auditable
+from ..versioned import Versioned
 
 
-class TestAuditable(DbTestCase):
+class TestVersioned(DbTestCase):
   def list_comp(self, seq, attr):
     return [ getattr(x, 'rev_id') for x in seq ]
 
@@ -20,7 +20,7 @@ class TestAuditable(DbTestCase):
 
   def test_schema(self):
     raise unittest.SkipTest('TODO')
-    class A(Auditable, Base):
+    class A(Versioned, Base):
       __tablename__ = 'a'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, nullable=False)
@@ -348,7 +348,7 @@ class TestAuditable(DbTestCase):
 
 
   def test_relationship(self):
-    class SomeClass(Auditable, Base):
+    class SomeClass(Versioned, Base):
       __tablename__ = 'someclass'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -359,7 +359,7 @@ class TestAuditable(DbTestCase):
         super(SomeClass, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
 
-    class SomeRelated(Auditable, Base):
+    class SomeRelated(Versioned, Base):
       __tablename__ = 'somerelated'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -414,7 +414,7 @@ class TestAuditable(DbTestCase):
 
   def test_backref_relationship(self):
     raise unittest.SkipTest('unpollute Base.metadata')
-    class SomeClass(Auditable, Base):
+    class SomeClass(Versioned, Base):
       __tablename__ = 'someclass'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -423,7 +423,7 @@ class TestAuditable(DbTestCase):
         super(SomeClass, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
 
-    class SomeRelated(Auditable, Base):
+    class SomeRelated(Versioned, Base):
       __tablename__ = 'somerelated'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -491,7 +491,7 @@ class TestAuditable(DbTestCase):
 
   def test_association_object(self):
     raise unittest.SkipTest('TODO: get association object to work')
-    class User(Auditable, Base):
+    class User(Versioned, Base):
       __tablename__ = 'user'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float)
@@ -504,7 +504,7 @@ class TestAuditable(DbTestCase):
         self.id = str(uuid.uuid4())
         self.created = time.time()
 
-    class Keyword(Auditable, Base):
+    class Keyword(Versioned, Base):
       __tablename__ = 'keyword'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float)
@@ -517,7 +517,7 @@ class TestAuditable(DbTestCase):
         self.id = str(uuid.uuid4())
         self.created = time.time()
 
-    class UserKeyword(Auditable, Base):
+    class UserKeyword(Versioned, Base):
       __tablename__ = 'user_keyword'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float)

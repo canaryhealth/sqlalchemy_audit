@@ -11,7 +11,7 @@ import uuid
 
 import sqlalchemy as sa
 
-class Auditable(object):
+class Versioned(object):
   '''
   Mixin that broadcasts and listens for DB CRUD operations and records the
   transaction as a new revision in a separate table.
@@ -20,10 +20,10 @@ class Auditable(object):
   -----
     # Set up DBSession
     DBSession = ...
-    Auditable.auditable_session(DBSession)
+    Versioned.versioned_session(DBSession)
 
-    # Class inherits Auditable and broadcast CRUD events
-    class MyClass(Auditable):
+    # Class inherits Versioned and broadcast CRUD events
+    class MyClass(Versioned):
       ...
 
     MyClass.broadcast_crud()
@@ -36,15 +36,15 @@ class Auditable(object):
   #       the handler
   @staticmethod
   def before_insert(mapper, connection, target):
-    Auditable.before_db_change(mapper, connection, target, 'insert')
+    Versioned.before_db_change(mapper, connection, target, 'insert')
 
   @staticmethod
   def before_update(mapper, connection, target):
-    Auditable.before_db_change(mapper, connection, target, 'update')
+    Versioned.before_db_change(mapper, connection, target, 'update')
 
   @staticmethod
   def before_delete(mapper, connection, target):
-    Auditable.before_db_change(mapper, connection, target, 'delete')
+    Versioned.before_db_change(mapper, connection, target, 'delete')
 
   @staticmethod
   def before_db_change(mapper, connection, target, action):
@@ -55,15 +55,15 @@ class Auditable(object):
   
   @staticmethod
   def after_insert(mapper, connection, target):
-    Auditable.after_db_change(mapper, connection, target, 'insert')
+    Versioned.after_db_change(mapper, connection, target, 'insert')
 
   @staticmethod
   def after_update(mapper, connection, target):
-    Auditable.after_db_change(mapper, connection, target, 'update')
+    Versioned.after_db_change(mapper, connection, target, 'update')
 
   @staticmethod
   def after_delete(mapper, connection, target):
-    Auditable.after_db_change(mapper, connection, target, 'delete')
+    Versioned.after_db_change(mapper, connection, target, 'delete')
 
   @staticmethod
   def after_db_change(mapper, connection, target, action):
@@ -84,13 +84,13 @@ class Auditable(object):
         if not (c.name.startswith('rev_') or c.primary_key is True):
           attr[c.name] = getattr(target, c.name)
     rev = target.Revision(**attr)
-    Auditable.DBSession.add(rev)
+    Versioned.DBSession.add(rev)
 
 
   @classmethod
   def broadcast_crud(cls):
     # create revision class
-    Auditable.create_rev_class(cls)
+    Versioned.create_rev_class(cls)
 
     # register listeners
     sa.event.listen(cls, 'before_insert', cls.before_insert)
@@ -147,7 +147,7 @@ class Auditable(object):
     cls.Revision = rev_cls
 
   @classmethod
-  def auditable_session(cls, session):
+  def versioned_session(cls, session):
     cls.DBSession = session
 
 #------------------------------------------------------------------------------
