@@ -8,7 +8,6 @@ import sqlalchemy as sa
 from canary.model.util import RestrictingForeignKey
 
 from . import DbTestCase
-from .reservation import Reservation, Base
 from ..versioned import Versioned
 
 
@@ -17,17 +16,16 @@ class TestVersioned(DbTestCase):
     return [ getattr(x, 'rev_id') for x in seq ]
 
 
-
   def test_schema(self):
     raise unittest.SkipTest('TODO')
-    class A(Versioned, Base):
+    class A(Versioned, self.Base):
       __tablename__ = 'a'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, nullable=False)
       name = sa.Column(sa.String, default='a', nullable=False)
       b_id = sa.Column(sa.String, RestrictingForeignKey('b.id'), nullable=False)
 
-    class B(Base):
+    class B(self.Base):
       __tablename__ = 'b'
       id = sa.Column(sa.String, primary_key=True)
       name = sa.Column(sa.String)
@@ -37,7 +35,7 @@ class TestVersioned(DbTestCase):
 
     result = A.Revision.__table__
     expected = sa.Table(
-      'a_rev_prime', Base.metadata,
+      'a_rev_prime', self.Base.metadata,
       sa.Column('rev_isdelete', sa.Boolean, default=False, nullable=False),
       sa.Column('id', sa.String, nullable=True),
       sa.Column('rev_id', sa.String, primary_key=True),
@@ -61,6 +59,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_insert(self):
+    Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name='Me', 
                               date=datetime.date(2015, 4, 2), 
@@ -93,6 +92,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_update(self):
+    Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name='Me', 
                               date=datetime.date(2015, 4, 13), 
@@ -152,6 +152,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_delete(self):
+    Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name='Me', 
                               date=datetime.date(2015, 5, 21), 
@@ -187,6 +188,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_insert_null(self):
+    Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name=None, 
                               date=None, time=None, party=None)
@@ -217,6 +219,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_update_from_null(self):
+    Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name=None, 
                               date=None, time=None, party=None)
@@ -264,6 +267,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_update_to_null(self):
+    Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name=None, 
                               date=datetime.date(2015, 5, 15),
@@ -311,6 +315,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_flushes(self):
+    Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name='Me', 
                               date=datetime.date(2015, 4, 13), 
@@ -348,7 +353,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_relationship(self):
-    class SomeClass(Versioned, Base):
+    class SomeClass(Versioned, self.Base):
       __tablename__ = 'someclass'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -359,7 +364,7 @@ class TestVersioned(DbTestCase):
         super(SomeClass, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
 
-    class SomeRelated(Versioned, Base):
+    class SomeRelated(Versioned, self.Base):
       __tablename__ = 'somerelated'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -413,8 +418,7 @@ class TestVersioned(DbTestCase):
 
 
   def test_backref_relationship(self):
-    raise unittest.SkipTest('unpollute Base.metadata')
-    class SomeClass(Versioned, Base):
+    class SomeClass(Versioned, self.Base):
       __tablename__ = 'someclass'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -423,7 +427,7 @@ class TestVersioned(DbTestCase):
         super(SomeClass, self).__init__(*args, **kwargs)
         self.id = str(uuid.uuid4())
 
-    class SomeRelated(Versioned, Base):
+    class SomeRelated(Versioned, self.Base):
       __tablename__ = 'somerelated'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, default=time.time, nullable=False)
@@ -465,7 +469,7 @@ class TestVersioned(DbTestCase):
     )
     # assert revisions
     self.assertSeqEqual(
-      sess.query(SomeClassRev).order_by(SomeClassRev.created).all(),
+      sess.query(SomeClassRev).order_by(SomeClassRev.rev_created).all(),
       [
         # todo: there are two b/c the relationship assignment does not
         #       consider whether the fields were changed.
@@ -475,7 +479,7 @@ class TestVersioned(DbTestCase):
       pick=('id', 'name')
     )
     self.assertSeqEqual(
-      sess.query(SomeRelatedRev).order_by(SomeRelatedRev.created).all(),
+      sess.query(SomeRelatedRev).order_by(SomeRelatedRev.rev_created).all(),
       [
         SomeRelatedRev(id=sr1.id, desc='sr1', related_id=sc1.id,
                        rev_isdelete=False),
@@ -491,7 +495,7 @@ class TestVersioned(DbTestCase):
 
   def test_association_object(self):
     raise unittest.SkipTest('TODO: get association object to work')
-    class User(Versioned, Base):
+    class User(Versioned, self.Base):
       __tablename__ = 'user'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float)
@@ -504,7 +508,7 @@ class TestVersioned(DbTestCase):
         self.id = str(uuid.uuid4())
         self.created = time.time()
 
-    class Keyword(Versioned, Base):
+    class Keyword(Versioned, self.Base):
       __tablename__ = 'keyword'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float)
@@ -517,7 +521,7 @@ class TestVersioned(DbTestCase):
         self.id = str(uuid.uuid4())
         self.created = time.time()
 
-    class UserKeyword(Versioned, Base):
+    class UserKeyword(Versioned, self.Base):
       __tablename__ = 'user_keyword'
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float)
