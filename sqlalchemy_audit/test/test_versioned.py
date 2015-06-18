@@ -400,7 +400,7 @@ class TestVersioned(DbTestCase):
     )
     # assert revisions
     self.assertSeqEqual(
-      sess.query(SomeClassRev).order_by(SomeClassRev.created).all(),
+      sess.query(SomeClassRev).order_by(SomeClassRev.rev_created).all(),
       [
         SomeClassRev(id=sc1.id, name='sc1', related_id=None),
         SomeClassRev(id=sc1.id, name='sc1', related_id=sr1.id),
@@ -408,7 +408,7 @@ class TestVersioned(DbTestCase):
       pick=('id', 'name', 'related_id')
     )
     self.assertSeqEqual(
-      sess.query(SomeRelatedRev).order_by(SomeRelatedRev.created).all(),
+      sess.query(SomeRelatedRev).order_by(SomeRelatedRev.rev_created).all(),
       [
         SomeRelatedRev(id=sr1.id, desc='sr1')
       ],
@@ -471,7 +471,7 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(SomeClassRev).order_by(SomeClassRev.rev_created).all(),
       [
-        # todo: there are two b/c the relationship assignment does not
+        # note: there are two b/c the relationship assignment does not
         #       consider whether the fields were changed.
         SomeClassRev(id=sc1.id, name='sc1'),
         SomeClassRev(id=sc1.id, name='sc1'),
@@ -489,67 +489,15 @@ class TestVersioned(DbTestCase):
                        rev_isdelete=True),
       ],
       pick=('id', 'desc', 'rev_isdelete')
-    )
+   )
 
 
 
   def test_association_object(self):
     raise unittest.SkipTest('TODO: get association object to work')
-    class User(Versioned, self.Base):
-      __tablename__ = 'user'
-      id = sa.Column(sa.String, primary_key=True)
-      created = sa.Column(sa.Float)
-      name = sa.Column(sa.String)
-      keywords = sa.ext.associationproxy.association_proxy(
-        'user_keyword', 'keyword',
-        creator=lambda kw: UserKeyword(keyword=kw))
-      def __init__(self, *args, **kwargs):
-        super(User, self).__init__(*args, **kwargs)
-        self.id = str(uuid.uuid4())
-        self.created = time.time()
+    User, UserRev, Keyword, KeywordRev, UserKeyword, UserKeywordRev = self.make_user_keyword()
 
-    class Keyword(Versioned, self.Base):
-      __tablename__ = 'keyword'
-      id = sa.Column(sa.String, primary_key=True)
-      created = sa.Column(sa.Float)
-      word = sa.Column(sa.String)
-      users = sa.ext.associationproxy.association_proxy(
-        'user_keyword', 'user',
-        creator=lambda usr: UserKeyword(user=usr))
-      def __init__(self, *args, **kwargs):
-        super(Keyword, self).__init__(*args, **kwargs)
-        self.id = str(uuid.uuid4())
-        self.created = time.time()
-
-    class UserKeyword(Versioned, self.Base):
-      __tablename__ = 'user_keyword'
-      id = sa.Column(sa.String, primary_key=True)
-      created = sa.Column(sa.Float)
-      user_id = sa.Column(sa.String, sa.ForeignKey('user.id'),
-                          primary_key=True)
-      user = sa.orm.relationship(
-        'User', 
-        backref=sa.orm.backref('user_keyword', cascade='all, delete-orphan'))
-      keyword_id = sa.Column(sa.Integer, sa.ForeignKey('keyword.id'),
-                             primary_key=True)
-      keyword = sa.orm.relationship(
-        'Keyword',
-        backref=sa.orm.backref('user_keyword', cascade='all, delete-orphan'))
-      def __init__(self, *args, **kwargs):
-        super(UserKeyword, self).__init__(*args, **kwargs)
-        self.id = str(uuid.uuid4())
-        self.created = time.time()
-
-    User.broadcast_crud()
-    UserRev = User.Revision
-    Keyword.broadcast_crud()
-    KeywordRev = Keyword.Revision
-    UserKeyword.broadcast_crud()
-    UserKeywordRev = UserKeyword.Revision
-    self.create_tables()
     sess = self.session
-
-    # part a
     boo = Keyword(word='boo')
     hoo = Keyword(word='hoo')
     steve = User(name='steve')
@@ -576,12 +524,10 @@ class TestVersioned(DbTestCase):
     )
     self.assertSeqEqual(
       sess.query(UserKeyword).all(),
-      # todo: need to figure out how to create UserKeyword obj from ids, work around by
-      #       querying for it
       [ 
-        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==boo.id).one(),
-        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==hoo.id).one(),
-        sess.query(UserKeyword).filter(UserKeyword.user_id==allan.id, UserKeyword.keyword_id==hoo.id).one(),
+        UserKeyword(user_id=steve.id, user=steve, keyword_id=boo.id, keyword=boo),
+        UserKeyword(user_id=steve.id, user=steve, keyword_id=hoo.id, keyword=hoo),
+        UserKeyword(user_id=allan.id, user=allan, keyword_id=hoo.id, keyword=hoo),
       ],
       pick=('user_id', 'keyword_id')
     )
@@ -601,16 +547,16 @@ class TestVersioned(DbTestCase):
       #allan hoo
     ]
     self.assertSeqEqual(
-      sess.query(UserRev).order_by(UserRev.created).all(),
+      sess.query(UserRev).order_by(UserRev.rev_created).all(),
       user_rev_a,
       pick=('id', 'name')
     )
     self.assertSeqEqual(
-      sess.query(KeywordRev).order_by(KeywordRev.created).all(),
+      sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
       kw_rev_a,
       pick=('id', 'word')
     )
-    # todo: assert assoc
+    todo: assert assoc
 
 
     # part b
@@ -647,12 +593,12 @@ class TestVersioned(DbTestCase):
     )
     # assert revisions
     self.assertSeqEqual(
-      sess.query(UserRev).order_by(UserRev.created).all(),
+      sess.query(UserRev).order_by(UserRev.rev_created).all(),
       user_rev_a + user_rev_b,
       pick=('id', 'name')
     )
     self.assertSeqEqual(
-      sess.query(KeywordRev).order_by(KeywordRev.created).all(),
+      sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
       kw_rev_a,
       pick=('id', 'word')
     )

@@ -63,6 +63,59 @@ class DbTestCase(unittest.TestCase):
     return Reservation
 
 
+  def make_user_keyword(self):
+    class User(Versioned, self.Base):
+      __tablename__ = 'user'
+      id = sa.Column(sa.String, primary_key=True)
+      created = sa.Column(sa.Float)
+      name = sa.Column(sa.String)
+      keywords = sa.ext.associationproxy.association_proxy(
+        'user_keyword', 'keyword',
+        creator=lambda kw: UserKeyword(keyword=kw))
+      def __init__(self, *args, **kwargs):
+        super(User, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.created = time.time()
+
+    class Keyword(Versioned, self.Base):
+      __tablename__ = 'keyword'
+      id = sa.Column(sa.String, primary_key=True)
+      created = sa.Column(sa.Float)
+      word = sa.Column(sa.String)
+      users = sa.ext.associationproxy.association_proxy(
+        'user_keyword', 'user',
+        creator=lambda usr: UserKeyword(user=usr))
+      def __init__(self, *args, **kwargs):
+        super(Keyword, self).__init__(*args, **kwargs)
+        self.id = str(uuid.uuid4())
+        self.created = time.time()
+
+    class UserKeyword(Versioned, self.Base):
+      __tablename__ = 'user_keyword'
+      user_id = sa.Column(sa.String, sa.ForeignKey('user.id'),
+                          primary_key=True)
+      user = sa.orm.relationship(
+        'User', 
+        backref=sa.orm.backref('user_keyword', cascade='all, delete-orphan'))
+      keyword_id = sa.Column(sa.Integer, sa.ForeignKey('keyword.id'),
+                             primary_key=True)
+      keyword = sa.orm.relationship(
+        'Keyword',
+        backref=sa.orm.backref('user_keyword', cascade='all, delete-orphan'))
+      def __init__(self, *args, **kwargs):
+        super(UserKeyword, self).__init__(*args, **kwargs)
+
+    User.broadcast_crud()
+    UserRev = User.Revision
+    Keyword.broadcast_crud()
+    KeywordRev = Keyword.Revision
+    UserKeyword.broadcast_crud()
+    UserKeywordRev = UserKeyword.Revision
+    self.create_tables()
+    return User, UserRev, Keyword, KeywordRev, UserKeyword, UserKeywordRev
+
+
+
   def assertSeqEqual(self, result, expected, pick=None):
     '''
     Helper method to compare two sequences. If `pick` is specified, then it 
