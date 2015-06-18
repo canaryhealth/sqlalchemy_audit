@@ -131,3 +131,11 @@ class DbTestCase(unittest.TestCase):
     # print expected
 
     self.assertEqual(result, expected, 'the sequences are different')
+
+
+  def assertCountUniqueValues(self, result, attr, expected_count):
+    '''
+    Helper method to validate the number of unique values in a collection.
+    '''
+    result_count = len(set([ getattr(x, attr) for x in result ]))
+    self.assertEqual(result_count, expected_count)

@@ -12,9 +12,6 @@ from ..versioned import Versioned
 
 
 class TestVersioned(DbTestCase):
-  def list_comp(self, seq, attr):
-    return [ getattr(x, 'rev_id') for x in seq ]
-
 
   def test_schema(self):
     class A(Versioned, self.Base):
@@ -36,7 +33,7 @@ class TestVersioned(DbTestCase):
     expected = sa.Table(
       'a_rev_prime', self.Base.metadata,
       sa.Column('rev_id', sa.String(length=36), primary_key=True),
-      sa.Column('rev_created', sa.Float, nullable=False),
+      sa.Column('created', sa.Float, nullable=False),
       sa.Column('rev_isdelete', sa.Boolean, default=False, nullable=False),
       sa.Column('id', sa.String, nullable=True),
       sa.Column('created', sa.Float, nullable=True),
@@ -150,9 +147,9 @@ class TestVersioned(DbTestCase):
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[2].rev_id)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 3)
+    self.assertCountUniqueValues(reservation_revs, 'rev_id', 3)
     self.assertNotEqual(reservations[0].created, reservation_revs[2].rev_created)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 3)
+    self.assertCountUniqueValues(reservation_revs, 'rev_created', 3)
 
 
 
@@ -187,8 +184,8 @@ class TestVersioned(DbTestCase):
       pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
     # assert rev ids
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 2)
+    self.assertCountUniqueValues(reservation_revs, 'rev_id', 2)
+    self.assertCountUniqueValues(reservation_revs, 'rev_created', 2)
 
 
 
@@ -265,9 +262,9 @@ class TestVersioned(DbTestCase):
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
+    self.assertCountUniqueValues(reservation_revs, 'rev_id', 2)
     self.assertNotEqual(reservations[0].created, reservation_revs[1].rev_created)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 2)
+    self.assertCountUniqueValues(reservation_revs, 'rev_created', 2)
 
 
 
@@ -313,9 +310,9 @@ class TestVersioned(DbTestCase):
     )
     # assert rev ids and created time
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_id'))), 2)
+    self.assertCountUniqueValues(reservation_revs, 'rev_id', 2)
     self.assertNotEqual(reservations[0].created, reservation_revs[1].rev_created)
-    self.assertEqual(len(set(self.list_comp(reservation_revs, 'rev_created'))), 2)
+    self.assertCountUniqueValues(reservation_revs, 'rev_created', 2)
 
 
 
