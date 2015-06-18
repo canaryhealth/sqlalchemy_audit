@@ -17,7 +17,6 @@ class TestVersioned(DbTestCase):
 
 
   def test_schema(self):
-    raise unittest.SkipTest('TODO')
     class A(Versioned, self.Base):
       __tablename__ = 'a'
       id = sa.Column(sa.String, primary_key=True)
@@ -36,25 +35,31 @@ class TestVersioned(DbTestCase):
     result = A.Revision.__table__
     expected = sa.Table(
       'a_rev_prime', self.Base.metadata,
+      sa.Column('rev_id', sa.String(length=36), primary_key=True),
+      sa.Column('rev_created', sa.Float, nullable=False),
       sa.Column('rev_isdelete', sa.Boolean, default=False, nullable=False),
       sa.Column('id', sa.String, nullable=True),
-      sa.Column('rev_id', sa.String, primary_key=True),
       sa.Column('created', sa.Float, nullable=True),
       sa.Column('name', sa.String, default=None, nullable=True),
       sa.Column('b_id', sa.String, nullable=True)
     )
 
     for col in ('rev_isdelete', 'id', 'rev_id', 'created', 'name', 'b_id'):
-      for prop in ('name', 'type', 'default', 'primary_key', 'nullable', 
+      for prop in ('name', 'type', 'default', 'primary_key', 'nullable',
                    'foreign_keys'):
-        pass
-        # todo: how do i compare their values...
-        # print col + '.' + prop
-        # print getattr(getattr(result.c, col), prop) 
-        # print getattr(getattr(expected.c, col), prop)
-        # print '----------'
-
-     #import pdb; pdb.set_trace()
+        result_col_prop = getattr(getattr(result.c, col), prop) 
+        expected_col_prop = getattr(getattr(expected.c, col), prop)
+        # todo: figure out these "hacks"
+        # `type`, `default` are returned as a method, hence the repr to get it 
+        # to compare
+        if prop in ('type', 'default'):
+          self.assertEqual(repr(result_col_prop), repr(expected_col_prop))
+        # `foreign_keys` is wrapped in a set for some reason for expected.
+        # perhaps declarative_base removes it for result.
+        elif prop == 'foreign_keys':
+          self.assertEqual(set(result_col_prop), expected_col_prop)
+        else:
+          self.assertEqual(result_col_prop, expected_col_prop)
 
 
 
@@ -556,7 +561,7 @@ class TestVersioned(DbTestCase):
       kw_rev_a,
       pick=('id', 'word')
     )
-    todo: assert assoc
+    # todo: assert assoc
 
 
     # part b
