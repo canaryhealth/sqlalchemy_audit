@@ -13,7 +13,7 @@ from ..versioned import Versioned
 
 class TestVersioned(DbTestCase):
 
-  def test_schema(self):
+  def test_rev_schema_creation(self):
     class A(Versioned, self.Base):
       __tablename__ = 'a'
       id = sa.Column(sa.String, primary_key=True)
@@ -33,7 +33,7 @@ class TestVersioned(DbTestCase):
     expected = sa.Table(
       'a_rev_prime', self.Base.metadata,
       sa.Column('rev_id', sa.String(length=36), primary_key=True),
-      sa.Column('created', sa.Float, nullable=False),
+      sa.Column('rev_created', sa.Float, nullable=False),
       sa.Column('rev_isdelete', sa.Boolean, default=False, nullable=False),
       sa.Column('id', sa.String, nullable=True),
       sa.Column('created', sa.Float, nullable=True),
@@ -316,7 +316,7 @@ class TestVersioned(DbTestCase):
 
 
 
-  def test_flushes(self):
+  def test_record_on_flush_only(self):
     Reservation = self.make_reservation()
     # insert
     reservation = Reservation(name='Me', 
