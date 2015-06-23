@@ -97,7 +97,7 @@ class DbTestCase(unittest.TestCase):
       user = sa.orm.relationship(
         'User', 
         backref=sa.orm.backref('user_keyword', cascade='all, delete-orphan'))
-      keyword_id = sa.Column(sa.Integer, sa.ForeignKey('keyword.id'),
+      keyword_id = sa.Column(sa.String, sa.ForeignKey('keyword.id'),
                              primary_key=True)
       keyword = sa.orm.relationship(
         'Keyword',

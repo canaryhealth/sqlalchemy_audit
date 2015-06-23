@@ -496,7 +496,34 @@ class TestVersioned(DbTestCase):
 
 
   def test_association_object_rev_schema_creation(self):
-    pass
+    User, UserRev, Keyword, KeywordRev, UserKeyword, UserKeywordRev = self.make_user_keyword()
+
+    result = UserKeywordRev.__table__
+    expected = sa.Table(
+      'uk_rev_prime', self.Base.metadata,
+      sa.Column('rev_id', sa.String(length=36), primary_key=True),
+      sa.Column('rev_created', sa.Float, nullable=False),
+      sa.Column('rev_isdelete', sa.Boolean, default=False, nullable=False),
+      sa.Column('user_id', sa.String, nullable=False),
+      sa.Column('keyword_id', sa.String, nullable=False),
+    )
+
+    for col in ('rev_isdelete', 'rev_id', 'rev_created', 'user_id', 'keyword_id'):
+      for prop in ('name', 'type', 'default', 'primary_key', 'nullable',
+                   'foreign_keys'):
+        result_col_prop = getattr(getattr(result.c, col), prop) 
+        expected_col_prop = getattr(getattr(expected.c, col), prop)
+        # todo: figure out these "hacks"
+        # `type`, `default` are returned as a method, hence the repr to get it 
+        # to compare
+        if prop in ('type', 'default'):
+          self.assertEqual(repr(result_col_prop), repr(expected_col_prop))
+        # `foreign_keys` is wrapped in a set for some reason for expected.
+        # perhaps declarative_base removes it for result.
+        elif prop == 'foreign_keys':
+          self.assertEqual(set(result_col_prop), expected_col_prop)
+        else:
+          self.assertEqual(result_col_prop, expected_col_prop)
 
 
 
