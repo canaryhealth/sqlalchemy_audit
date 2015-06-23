@@ -35,7 +35,7 @@ class TestVersioned(DbTestCase):
       sa.Column('rev_id', sa.String(length=36), primary_key=True),
       sa.Column('rev_created', sa.Float, nullable=False),
       sa.Column('rev_isdelete', sa.Boolean, default=False, nullable=False),
-      sa.Column('id', sa.String, nullable=True),
+      sa.Column('id', sa.String, nullable=False),
       sa.Column('created', sa.Float, nullable=True),
       sa.Column('name', sa.String, default=None, nullable=True),
       sa.Column('b_id', sa.String, nullable=True)
@@ -495,8 +495,12 @@ class TestVersioned(DbTestCase):
 
 
 
-  def test_association_object(self):
-    raise unittest.SkipTest('TODO: get association object to work')
+  def test_association_object_rev_schema_creation(self):
+    pass
+
+
+
+  def test_association_object_insert(self):
     User, UserRev, Keyword, KeywordRev, UserKeyword, UserKeywordRev = self.make_user_keyword()
 
     sess = self.session
@@ -504,138 +508,207 @@ class TestVersioned(DbTestCase):
     hoo = Keyword(word='hoo')
     steve = User(name='steve')
     allan = User(name='allan')
-    sess.add(boo)
-    sess.add(hoo)
-    sess.add(steve)
-    sess.add(allan)
-    steve.keywords.append(boo)
-    steve.keywords.append(hoo)
-    allan.keywords.append(hoo)
+    sess.add(boo); sess.flush()
+    sess.add(hoo); sess.flush()
+    sess.add(steve); sess.flush()
+    sess.add(allan); sess.flush()
+    steve.keywords.append(boo); sess.flush()
+    allan.keywords.append(hoo); sess.flush()
     sess.commit()
+
+    users = sess.query(User).all()
+    kws = sess.query(Keyword).all()
+    user_kws = sess.query(UserKeyword).all()
+    user_revs = sess.query(UserRev).order_by(User.Revision.rev_created).all()
+    kw_revs =  sess.query(KeywordRev).order_by(KeywordRev.rev_created).all()
+    user_kw_revs = sess.query(UserKeywordRev).order_by(UserKeywordRev.rev_created).all()
 
     # assert source
     self.assertSeqEqual(
-      sess.query(User).all(),
+      users,
       [steve, allan], 
       pick=('name')
     )
     self.assertSeqEqual(
-      sess.query(Keyword).all(),
+      kws,
       [boo, hoo],
       pick=('word')
     )
     self.assertSeqEqual(
-      sess.query(UserKeyword).all(),
+      user_kws,
       [ 
         UserKeyword(user_id=steve.id, user=steve, keyword_id=boo.id, keyword=boo),
-        UserKeyword(user_id=steve.id, user=steve, keyword_id=hoo.id, keyword=hoo),
         UserKeyword(user_id=allan.id, user=allan, keyword_id=hoo.id, keyword=hoo),
       ],
       pick=('user_id', 'keyword_id')
     )
     # assert revisions
-    user_rev_a = [
-      UserRev(id=steve.id, name='steve'),
-      UserRev(id=allan.id, name='allan'),
-    ]
-    kw_rev_a = [
-      KeywordRev(id=boo.id, word='boo'),
-      KeywordRev(id=hoo.id, word='hoo'),
-    ]
-    user_kw_rev_a = [
-      # todo
-      #steve boo
-      #steve hoo
-      #allan hoo
-    ]
     self.assertSeqEqual(
-      sess.query(UserRev).order_by(UserRev.rev_created).all(),
-      user_rev_a,
+      user_revs,
+      [
+        UserRev(id=steve.id, name='steve'),
+        UserRev(id=allan.id, name='allan'),
+        UserRev(id=steve.id, name='steve'),
+        UserRev(id=allan.id, name='allan'),
+      ],
       pick=('id', 'name')
     )
     self.assertSeqEqual(
-      sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
-      kw_rev_a,
+      kw_revs,
+      [
+        KeywordRev(id=boo.id, word='boo'),
+        KeywordRev(id=hoo.id, word='hoo'),
+        KeywordRev(id=boo.id, word='boo'),
+        KeywordRev(id=hoo.id, word='hoo'),
+      ],
       pick=('id', 'word')
     )
-    # todo: assert assoc
+    self.assertSeqEqual(
+      user_kw_revs,
+      [
+        UserKeywordRev(user_id=steve.id, keyword_id=boo.id, rev_isdelete=False),
+        UserKeywordRev(user_id=allan.id, keyword_id=hoo.id,rev_isdelete=False),
+      ],
+      pick=('user_id', 'keyword_id', 'rev_isdelete')
+    )
 
 
-    # part b
-    allan.keywords.remove(hoo)
+
+  def test_association_object_delete(self):
+    User, UserRev, Keyword, KeywordRev, UserKeyword, UserKeywordRev = self.make_user_keyword()
+
+    sess = self.session
+    boo = Keyword(word='boo')
+    steve = User(name='steve')
+    sess.add(boo)
+    sess.add(steve)
+    steve.keywords.append(boo)
+    sess.commit()
+    steve.keywords.remove(boo)
     sess.commit()
 
-    user_rev_b = [
-      UserRev(id=allan.id, name='allan'),
-    ]
-    user_kw_rev_b = [
-      # delete allan hoo
-    ]
+    users = sess.query(User).all()
+    kws = sess.query(Keyword).all()
+    user_kws = sess.query(UserKeyword).all()
+    user_revs = sess.query(UserRev).order_by(User.Revision.rev_created).all()
+    kw_revs =  sess.query(KeywordRev).order_by(KeywordRev.rev_created).all()
+    user_kw_revs = sess.query(UserKeywordRev).order_by(UserKeywordRev.rev_created).all()
+
     # assert source
     self.assertSeqEqual(
-      sess.query(User).all(),
+      users,
+      [steve], 
+      pick=('name')
+    )
+    self.assertSeqEqual(
+      kws,
+      [boo],
+      pick=('word')
+    )
+    self.assertSeqEqual(
+      user_kws,
+      [],
+      pick=('user_id', 'keyword_id')
+    )
+    # assert revisions
+    self.assertSeqEqual(
+      user_revs,
+      [
+        UserRev(id=steve.id, name='steve'),
+        UserRev(id=steve.id, name='steve'),
+      ],
+      pick=('id', 'name')
+    )
+    self.assertSeqEqual(
+      kw_revs,
+      [
+        KeywordRev(id=boo.id, word='boo'),
+      ],
+      pick=('id', 'word')
+    )
+    self.assertSeqEqual(
+      user_kw_revs,
+      [
+        UserKeywordRev(user_id=steve.id, keyword_id=boo.id, rev_isdelete=False),
+        UserKeywordRev(user_id=steve.id, keyword_id=boo.id,  rev_isdelete=True),
+      ],
+      pick=('user_id', 'keyword_id', 'rev_isdelete')
+    )
+
+
+
+  def test_association_object_delete_cascade(self):
+    User, UserRev, Keyword, KeywordRev, UserKeyword, UserKeywordRev = self.make_user_keyword()
+
+    sess = self.session
+    boo = Keyword(word='boo')
+    hoo = Keyword(word='hoo')
+    steve = User(name='steve')
+    allan = User(name='allan')
+    sess.add(boo); sess.flush()
+    sess.add(hoo); sess.flush()
+    sess.add(steve); sess.flush()
+    sess.add(allan); sess.flush()
+    steve.keywords.append(boo); sess.flush()
+    allan.keywords.append(hoo); sess.flush()
+    sess.commit()
+    sess.delete(boo)
+    sess.commit()
+
+
+    users = sess.query(User).all()
+    kws = sess.query(Keyword).all()
+    user_kws = sess.query(UserKeyword).all()
+    user_revs = sess.query(UserRev).order_by(User.Revision.rev_created).all()
+    kw_revs =  sess.query(KeywordRev).order_by(KeywordRev.rev_created).all()
+    user_kw_revs = sess.query(UserKeywordRev).order_by(UserKeywordRev.rev_created).all()
+
+    # assert source
+    self.assertSeqEqual(
+      users,
       [steve, allan], 
       pick=('name')
     )
     self.assertSeqEqual(
-      sess.query(Keyword).all(),
-      [boo, hoo],
+      kws,
+      [hoo],
       pick=('word')
     )
-    # todo: assert assoc
     self.assertSeqEqual(
-      sess.query(UserKeyword).all(),
-      # todo: need to figure out how to create UserKeyword obj from ids, work around by
-      #       querying for it
+      user_kws,
       [ 
-        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==boo.id).one(),
-        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==hoo.id).one(),
+        UserKeyword(user_id=allan.id, user=allan, keyword_id=hoo.id, keyword=hoo),
       ],
       pick=('user_id', 'keyword_id')
     )
     # assert revisions
     self.assertSeqEqual(
-      sess.query(UserRev).order_by(UserRev.rev_created).all(),
-      user_rev_a + user_rev_b,
-      pick=('id', 'name')
-    )
-    self.assertSeqEqual(
-      sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
-      kw_rev_a,
-      pick=('id', 'word')
-    )
-    # todo: assert assoc
-
-
-    # part c
-    sess.delete(hoo)
-    sess.commit()
-
-    # assert source
-    self.assertSeqEqual(
-      sess.query(User).all(),
-      [steve, allan], 
-      pick=('name')
-    )
-    self.assertSeqEqual(
-      sess.query(Keyword).all(),
-      [boo],
-      pick=('word')
-    )
-    # todo: assert assoc
-    self.assertSeqEqual(
-      sess.query(UserKeyword).all(),
-      # todo: need to figure out how to create UserKeyword obj from ids, work around by
-      #       querying for it
-      [ 
-        sess.query(UserKeyword).filter(UserKeyword.user_id==steve.id, UserKeyword.keyword_id==boo.id).one(),
+      user_revs,
+      [
+        UserRev(id=steve.id, name='steve', rev_isdelete=False),
+        UserRev(id=allan.id, name='allan', rev_isdelete=False),
+        UserRev(id=steve.id, name='steve', rev_isdelete=False),
+        UserRev(id=allan.id, name='allan', rev_isdelete=False),
       ],
-      pick=('user_id', 'keyword_id')
+      pick=('id', 'name', 'rev_isdelete')
     )
-
-    kw_rev_c = [
-      # delete hoo
-    ]
-    user_kw_rev_c = [
-      # delete steve hoo
-    ]
+    self.assertSeqEqual(
+      kw_revs,
+      [
+        KeywordRev(id=boo.id, word='boo', rev_isdelete=False),
+        KeywordRev(id=hoo.id, word='hoo', rev_isdelete=False),
+        KeywordRev(id=boo.id, word='boo', rev_isdelete=False),
+        KeywordRev(id=hoo.id, word='hoo', rev_isdelete=False),
+        KeywordRev(id=boo.id, word=None, rev_isdelete=True),
+      ],
+      pick=('id', 'word', 'rev_isdelete')
+    )
+    self.assertSeqEqual(
+      user_kw_revs,
+      [
+        UserKeywordRev(user_id=steve.id, keyword_id=boo.id, rev_isdelete=False),
+        UserKeywordRev(user_id=allan.id, keyword_id=hoo.id,rev_isdelete=False),
+        UserKeywordRev(user_id=steve.id, keyword_id=boo.id, rev_isdelete=True),
+      ],
+      pick=('user_id', 'keyword_id', 'rev_isdelete')
+    )

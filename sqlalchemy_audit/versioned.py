@@ -72,7 +72,8 @@ class Versioned(object):
     attr.rev_id = getattr(target, 'rev_id')
     attr.rev_created = time.time()
     attr.rev_isdelete = False
-    attr.id = getattr(target, 'id')  # change this to work with any PK
+    for k in target.__table__.primary_key:
+      attr[k.name] = getattr(target, k.name)
 
     if action == 'delete':
       attr.rev_isdelete = True
@@ -108,7 +109,10 @@ class Versioned(object):
       Copies column and removes nullable, constraints, and defaults. 
       '''
       col = col.copy()
-      col.nullable = True
+      if col.primary_key is True:
+        col.nullable = False
+      else:
+        col.nullable = True
       col.unique = False
       col.primary_key = False
       col.foreign_keys = []
