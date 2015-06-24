@@ -30,7 +30,7 @@ class Versioned(object):
   '''
   DBSession = None
 
-  rev_id = sa.Column('rev_id', sa.String(36), nullable=False)
+  rev_id = sa.Column('rev_id', sa.String(36), nullable=False, unique=True)
 
   # todo: switch to pub/sub or message broker instead of directly setting 
   #       the handler
@@ -104,6 +104,8 @@ class Versioned(object):
 
   @staticmethod
   def create_rev_class(cls):
+    # todo: validate autogenerate capabilities with alembic for 
+    #       indexes, unique constraints, and foreign keys
     def _col_copy(col):
       ''''
       Copies column and removes nullable, constraints, and defaults. 
@@ -111,6 +113,7 @@ class Versioned(object):
       col = col.copy()
       if col.primary_key is True:
         col.nullable = False
+        col.index = True
       else:
         col.nullable = True
       col.unique = False

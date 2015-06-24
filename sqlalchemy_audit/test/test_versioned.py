@@ -29,6 +29,8 @@ class TestVersioned(DbTestCase):
     A.broadcast_crud()
     self.create_tables()
 
+    self.assertEqual(A.__table__.c.rev_id.unique, True)
+
     result = A.Revision.__table__
     expected = sa.Table(
       'a_rev_prime', self.Base.metadata,
