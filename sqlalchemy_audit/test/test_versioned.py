@@ -481,9 +481,6 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(SomeClassRev).order_by(SomeClassRev.rev_created).all(),
       [
-        # note: there are two b/c the relationship assignment does not
-        #       consider whether the fields were changed.
-        { 'id': sc1.id, 'name': 'sc1' },
         { 'id': sc1.id, 'name': 'sc1' },
       ],
       pick=('id', 'name')
@@ -576,16 +573,12 @@ class TestVersioned(DbTestCase):
       [
         { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False  },
         { 'id': allan.id, 'name': 'allan', 'rev_isdelete': False  },
-        { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False  },
-        { 'id': allan.id, 'name': 'allan', 'rev_isdelete': False  },
       ],
       pick=('id', 'name', 'rev_isdelete')
     )
     self.assertSeqEqual(
       sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
       [
-        { 'id': boo.id, 'word': 'boo', 'rev_isdelete': False },
-        { 'id': hoo.id, 'word': 'hoo', 'rev_isdelete': False },
         { 'id': boo.id, 'word': 'boo', 'rev_isdelete': False },
         { 'id': hoo.id, 'word': 'hoo', 'rev_isdelete': False },
       ],
@@ -635,7 +628,6 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(UserRev).order_by(User.Revision.rev_created).all(),
       [
-        { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False },
         { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False },
       ],
       pick=('id', 'name', 'rev_isdelete')
@@ -700,16 +692,12 @@ class TestVersioned(DbTestCase):
       [
         { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False },
         { 'id': allan.id, 'name': 'allan', 'rev_isdelete': False },
-        { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False }, 
-        { 'id': allan.id, 'name': 'allan', 'rev_isdelete': False },
       ],
       pick=('id', 'name', 'rev_isdelete')
     )
     self.assertSeqEqual(
       sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
       [
-        { 'id': boo.id, 'word': 'boo', 'rev_isdelete': False },
-        { 'id': hoo.id, 'word': 'hoo', 'rev_isdelete': False },
         { 'id': boo.id, 'word': 'boo', 'rev_isdelete': False },
         { 'id': hoo.id, 'word': 'hoo', 'rev_isdelete': False },
         { 'id': boo.id, 'word': None, 'rev_isdelete': True },

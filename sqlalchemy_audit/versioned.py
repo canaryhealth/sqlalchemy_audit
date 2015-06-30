@@ -58,8 +58,16 @@ class Versioned(object):
     Versioned.after_db_change(mapper, connection, target, 'insert')
 
   @staticmethod
-  def after_update(mapper, connection, target):
-    Versioned.after_db_change(mapper, connection, target, 'update')
+  def after_update(mapper, connection, target): 
+    obj_changed = False
+    for col in target.__table__.columns:
+      prop = mapper.get_property_by_column(col)
+      if (prop.key != 'rev_id'
+          and sa.orm.attributes.get_history(target, prop.key).has_changes()):
+        obj_changed = True
+        break
+    if obj_changed:
+      Versioned.after_db_change(mapper, connection, target, 'update')
 
   @staticmethod
   def after_delete(mapper, connection, target):
