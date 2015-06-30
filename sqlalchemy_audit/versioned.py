@@ -152,10 +152,21 @@ class Versioned(object):
     rev_cls.__table__ = table
     rev_cls.__mapper__ = mapper
     cls.Revision = rev_cls
+    sa.event.listen(rev_cls, 'before_update', raiseUpdateForbidden)
+    sa.event.listen(rev_cls, 'before_delete', raiseDeleteForbidden)
 
   @classmethod
   def versioned_session(cls, session):
     cls.DBSession = session
+
+
+class DeleteForbidden(Exception): pass
+def raiseDeleteForbidden(mapper, connection, target):
+  raise DeleteForbidden('%r cannot be deleted' % (target,))
+
+class UpdateForbidden(Exception): pass
+def raiseUpdateForbidden(mapper, connection, target):
+  raise UpdateForbidden('%r cannot be updated' % (target,))
 
 #------------------------------------------------------------------------------
 # end of $Id$

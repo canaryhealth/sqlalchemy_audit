@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from canary.model.util import RestrictingForeignKey
 
 from . import DbTestCase
-from ..versioned import Versioned
+from ..versioned import Versioned, DeleteForbidden, UpdateForbidden
 
 
 class TestVersioned(DbTestCase):
@@ -725,3 +725,35 @@ class TestVersioned(DbTestCase):
       ],
       pick=('user_id', 'keyword_id', 'rev_isdelete')
     )
+
+
+
+  def test_cannot_update_revision(self):
+    Reservation = self.make_reservation()
+
+    reservation = Reservation(name='Me',
+                              date=datetime.date(2015, 4, 2),
+                              time=datetime.time(8, 25),
+                              party=2)
+    self.session.add(reservation)
+    self.session.commit()
+
+    rev = self.session.query(Reservation.Revision).filter_by(id=reservation.id).one()
+    rev.name = 'You'
+    self.assertRaises(UpdateForbidden, self.session.commit)
+
+
+
+  def test_cannot_delete_revison(self):
+    Reservation = self.make_reservation()
+
+    reservation = Reservation(name='Me',
+                              date=datetime.date(2015, 4, 2),
+                              time=datetime.time(8, 25),
+                              party=2)
+    self.session.add(reservation)
+    self.session.commit()
+
+    rev = self.session.query(Reservation.Revision).filter_by(id=reservation.id).one()
+    self.session.delete(rev)
+    self.assertRaises(DeleteForbidden, self.session.commit)
