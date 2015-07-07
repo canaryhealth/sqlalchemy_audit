@@ -40,25 +40,6 @@ class Versioned(object):
 
   @staticmethod
   def before_update(mapper, connection, target):
-    Versioned.before_db_change(mapper, connection, target, 'update')
-
-  @staticmethod
-  def before_delete(mapper, connection, target):
-    Versioned.before_db_change(mapper, connection, target, 'delete')
-
-  @staticmethod
-  def before_db_change(mapper, connection, target, action):
-    # re-roll the rev_id on change
-    # this is needed for insert b/c we don't have init to populate its value
-    target.rev_id = str(uuid.uuid4())
-
-  
-  @staticmethod
-  def after_insert(mapper, connection, target):
-    Versioned.after_db_change(mapper, connection, target, 'insert')
-
-  @staticmethod
-  def after_update(mapper, connection, target): 
     obj_changed = False
     for col in target.__table__.columns:
       prop = mapper.get_property_by_column(col)
@@ -67,14 +48,19 @@ class Versioned(object):
         obj_changed = True
         break
     if obj_changed:
-      Versioned.after_db_change(mapper, connection, target, 'update')
+      Versioned.before_db_change(mapper, connection, target, 'update')
 
   @staticmethod
-  def after_delete(mapper, connection, target):
-    Versioned.after_db_change(mapper, connection, target, 'delete')
+  def before_delete(mapper, connection, target):
+    Versioned.before_db_change(mapper, connection, target, 'delete')
 
   @staticmethod
-  def after_db_change(mapper, connection, target, action):
+  def before_db_change(mapper, connection, target, action):
+    # target: re-roll the rev_id on change
+    # this is needed for insert b/c we don't have init to populate its value
+    target.rev_id = str(uuid.uuid4())
+
+    # revision
     # todo: should we handle the defaults in a constructor?
     attr = aadict.aadict()
     attr.rev_id = getattr(target, 'rev_id')
@@ -105,9 +91,6 @@ class Versioned(object):
     sa.event.listen(cls, 'before_insert', cls.before_insert)
     sa.event.listen(cls, 'before_update', cls.before_update)
     sa.event.listen(cls, 'before_delete', cls.before_delete)
-    sa.event.listen(cls, 'after_insert', cls.after_insert)
-    sa.event.listen(cls, 'after_update', cls. after_update)
-    sa.event.listen(cls, 'after_delete', cls.after_delete)
 
 
   @staticmethod

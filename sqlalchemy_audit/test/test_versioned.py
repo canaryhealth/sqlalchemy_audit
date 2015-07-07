@@ -78,7 +78,7 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       reservations, 
       [ reservation ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_id')
     )
     # assert revisions
     self.assertSeqEqual(
@@ -88,9 +88,11 @@ class TestVersioned(DbTestCase):
           'date': datetime.date(2015, 4, 2),
           'time': datetime.time(8, 25),
           'party': 2,
-          'rev_isdelete': False },
+          'rev_isdelete': False,
+          'rev_id': reservation.rev_id },
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party',
+            'rev_isdelete', 'rev_id')
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[0].rev_id)
@@ -107,15 +109,18 @@ class TestVersioned(DbTestCase):
                               party=10)
     self.session.add(reservation)
     self.session.commit()
+    rev_id_1 = reservation.rev_id
     # update
     reservation.date = datetime.date(2015, 4, 15)
     reservation.time = datetime.time(19, 30)
     reservation.party = 15
     self.session.commit()
+    rev_id_2 = reservation.rev_id
     reservation.date = datetime.date(2015, 5, 15)
     reservation.time = datetime.time(19, 15)
     reservation.party = 11
     self.session.commit()
+    rev_id_3 = reservation.rev_id
 
     reservations = self.session.query(Reservation).all()
     reservation_revs = self.session.query(Reservation.Revision).order_by('rev_created').all()
@@ -126,9 +131,10 @@ class TestVersioned(DbTestCase):
           'name': 'Me',
           'date': datetime.date(2015, 5, 15),
           'time': datetime.time(19, 15),
-          'party': 11 },
+          'party': 11,
+          'rev_id': rev_id_3 },
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_id')
     )
     # assert revisions
     self.assertSeqEqual(
@@ -138,21 +144,25 @@ class TestVersioned(DbTestCase):
           'date': datetime.date(2015, 4, 13),
           'time': datetime.time(19, 00),
           'party': 10,
-          'rev_isdelete': False },
+          'rev_isdelete': False,
+          'rev_id': rev_id_1 },
         { 'id': reservation.id, 'created': reservation.created,
           'name': 'Me',
           'date': datetime.date(2015, 4, 15),
           'time': datetime.time(19, 30),
           'party': 15,
-          'rev_isdelete': False },
+          'rev_isdelete': False,
+          'rev_id': rev_id_2 },
         { 'id': reservation.id, 'created': reservation.created,
           'name': 'Me',
           'date': datetime.date(2015, 5, 15),
           'time': datetime.time(19, 15),
           'party': 11,
-          'rev_isdelete': False },
+          'rev_isdelete': False,
+          'rev_id': rev_id_3 },
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party',
+            'rev_isdelete', 'rev_id')
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[2].rev_id)
@@ -170,7 +180,7 @@ class TestVersioned(DbTestCase):
                               time=datetime.time(18, 45),
                               party=6)
     self.session.add(reservation)
-    self.session.commit()    
+    self.session.commit()
     # delete
     self.session.delete(reservation)
     self.session.commit()
@@ -195,6 +205,7 @@ class TestVersioned(DbTestCase):
       ],
       pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
+    # todo: validate rev_id of deleted
     # assert rev ids
     self.assertCountUniqueValues(reservation_revs, 'rev_id', 2)
     self.assertCountUniqueValues(reservation_revs, 'rev_created', 2)
@@ -214,15 +225,16 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       reservations,
       [ reservation ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party'))
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_id'))
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
       [ { 'id': reservation.id, 'created': reservation.created,
           'name': None, 'date': None, 'time': None, 'party': None,
-          'rev_isdelete': False },
+          'rev_isdelete': False, 'rev_id': reservation.rev_id },
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party',
+            'rev_isdelete', 'rev_id')
     )
     # assert rev ids and created time
     self.assertEqual(reservations[0].rev_id, reservation_revs[0].rev_id)
@@ -236,10 +248,12 @@ class TestVersioned(DbTestCase):
     reservation = Reservation(name=None, date=None, time=None, party=None)
     self.session.add(reservation)
     self.session.commit()
+    rev_id_1 = reservation.rev_id
     reservation.date = datetime.date(2015, 5, 15)
     reservation.time = datetime.time(19, 15)
     reservation.party = 11
     self.session.commit()
+    rev_id_2 = reservation.rev_id
 
     reservations = self.session.query(Reservation).all()
     reservation_revs = self.session.query(Reservation.Revision).order_by('rev_created').all()
@@ -250,24 +264,27 @@ class TestVersioned(DbTestCase):
           'name': None,
           'date': datetime.date(2015, 5, 15),
           'time': datetime.time(19, 15),
-          'party': 11 },
+          'party': 11,
+          'rev_id': rev_id_2
+        },
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_id')
     )
     # assert revisions
     self.assertSeqEqual(
       reservation_revs,
       [ { 'id': reservation.id, 'created': reservation.created,
           'name': None, 'date': None, 'time': None, 'party': None,
-          'rev_isdelete': False },
+          'rev_isdelete': False, 'rev_id': rev_id_1 },
         { 'id': reservation.id, 'created': reservation.created,
           'name': None,
           'date': datetime.date(2015, 5, 15),
           'time': datetime.time(19, 15),
           'party': 11,
-          'rev_isdelete': False },
+          'rev_isdelete': False, 'rev_id': rev_id_2 },
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party',
+            'rev_isdelete', 'rev_id')
     )
     # assert rev ids and created times
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
@@ -286,10 +303,12 @@ class TestVersioned(DbTestCase):
                               party=11)
     self.session.add(reservation)
     self.session.commit()
+    rev_id_1 = reservation.rev_id
     reservation.date = None
     reservation.time = None
     reservation.party = None
     self.session.commit()
+    rev_id_2 = reservation.rev_id
 
     reservations = self.session.query(Reservation).all()
     reservation_revs = self.session.query(Reservation.Revision).order_by('rev_created').all()
@@ -297,9 +316,10 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       reservations,
       [ { 'id': reservation.id, 'created': reservation.created,
-          'name': None, 'date': None, 'time': None, 'party': None }
+          'name': None, 'date': None, 'time': None, 'party': None,
+          'rev_id': rev_id_2 }
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party')
+      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_id')
     )
     # assert revisions
     self.assertSeqEqual(
@@ -309,12 +329,13 @@ class TestVersioned(DbTestCase):
           'date': datetime.date(2015, 5, 15),
           'time': datetime.time(19, 15),
           'party': 11,
-          'rev_isdelete': False },
+          'rev_isdelete': False, 'rev_id': rev_id_1 },
         { 'id': reservation.id, 'created': reservation.created,
           'name': None, 'date': None, 'time': None, 'party': None,
-          'rev_isdelete': False },
+          'rev_isdelete': False, 'rev_id': rev_id_2 },
       ],
-      pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
+      pick=('id', 'created', 'name', 'date', 'time', 'party',
+            'rev_isdelete', 'rev_id')
     )
     # assert rev ids and created time
     self.assertEqual(reservations[0].rev_id, reservation_revs[1].rev_id)
@@ -359,6 +380,7 @@ class TestVersioned(DbTestCase):
       ],
       pick=('id', 'created', 'name', 'date', 'time', 'party', 'rev_isdelete')
     )
+    # todo: validate rev_id of deleted
 
 
 
@@ -393,36 +415,40 @@ class TestVersioned(DbTestCase):
     sc1 = SomeClass(name='sc1')
     sess.add(sc1)
     sess.commit()
+    sc1_rev_id_1 = sc1.rev_id
     sr1 = SomeRelated(desc='sr1')
     sc1.related = sr1
     sess.commit()
+    sc1_rev_id_2 = sc1.rev_id
 
     # assert source
     self.assertSeqEqual(
       self.session.query(SomeClass).all(),
       [sc1],
-      pick=('id', 'name')
+      pick=('id', 'name', 'rev_id')
     )
     self.assertSeqEqual(
       self.session.query(SomeRelated).all(),
       [sr1],
-      pick=('id', 'desc')
+      pick=('id', 'desc', 'rev_id')
     )
     # assert revisions
     self.assertSeqEqual(
       sess.query(SomeClassRev).order_by(SomeClassRev.rev_created).all(),
       [
-        { 'id': sc1.id, 'name': 'sc1', 'related_id': None },
-        { 'id': sc1.id, 'name': 'sc1', 'related_id': sr1.id },
+        { 'id': sc1.id, 'name': 'sc1', 'related_id': None, 
+          'rev_id': sc1_rev_id_1 },
+        { 'id': sc1.id, 'name': 'sc1', 'related_id': sr1.id,
+          'rev_id': sc1_rev_id_2 },
       ],
-      pick=('id', 'name', 'related_id')
+      pick=('id', 'name', 'related_id', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(SomeRelatedRev).order_by(SomeRelatedRev.rev_created).all(),
       [
-        { 'id': sr1.id, 'desc': 'sr1' },
+        { 'id': sr1.id, 'desc': 'sr1', 'rev_id': sr1.rev_id },
       ],
-      pick=('id', 'desc')
+      pick=('id', 'desc', 'rev_id')
     )
 
 
@@ -466,24 +492,25 @@ class TestVersioned(DbTestCase):
     sess.delete(sr1)
     sess.commit()
 
+
     # assert source
     self.assertSeqEqual(
       self.session.query(SomeClass).all(),
       [sc1],
-      pick=('id', 'name')
+      pick=('id', 'name', 'rev_id')
     )
     self.assertSeqEqual(
       self.session.query(SomeRelated).all(),
       [],
-      pick=('id', 'desc')
+      pick=('id', 'desc', 'rev_id')
     )
     # assert revisions
     self.assertSeqEqual(
       sess.query(SomeClassRev).order_by(SomeClassRev.rev_created).all(),
       [
-        { 'id': sc1.id, 'name': 'sc1' },
+        { 'id': sc1.id, 'name': 'sc1', 'rev_id': sc1.rev_id },
       ],
-      pick=('id', 'name')
+      pick=('id', 'name', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(SomeRelatedRev).order_by(SomeRelatedRev.rev_created).all(),
@@ -496,7 +523,8 @@ class TestVersioned(DbTestCase):
           'rev_isdelete': True },
       ],
       pick=('id', 'desc', 'rev_isdelete')
-   )
+    )
+    # todo: validate rev_id of deleted
 
 
 
@@ -552,12 +580,12 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(User).all(),
       [steve, allan], 
-      pick=('name')
+      pick=('id', 'name', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(Keyword).all(),
       [boo, hoo],
-      pick=('word')
+      pick=('id', 'word', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(UserKeyword).all(),
@@ -571,16 +599,20 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(UserRev).order_by(User.Revision.rev_created).all(),
       [
-        { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False  },
-        { 'id': allan.id, 'name': 'allan', 'rev_isdelete': False  },
+        { 'id': steve.id, 'name': 'steve',
+          'rev_isdelete': False, 'rev_id': steve.rev_id  },
+        { 'id': allan.id, 'name': 'allan',
+          'rev_isdelete': False, 'rev_id': allan.rev_id  },
       ],
       pick=('id', 'name', 'rev_isdelete')
     )
     self.assertSeqEqual(
       sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
       [
-        { 'id': boo.id, 'word': 'boo', 'rev_isdelete': False },
-        { 'id': hoo.id, 'word': 'hoo', 'rev_isdelete': False },
+        { 'id': boo.id, 'word': 'boo',
+          'rev_isdelete': False, 'rev_id': boo.rev_id },
+        { 'id': hoo.id, 'word': 'hoo',
+          'rev_isdelete': False, 'rev_id': hoo.rev_id },
       ],
       pick=('id', 'word', 'rev_isdelete')
     )
@@ -592,6 +624,7 @@ class TestVersioned(DbTestCase):
       ],
       pick=('user_id', 'keyword_id', 'rev_isdelete')
     )
+    # todo: validate rev_id of deleted
 
 
 
@@ -612,12 +645,12 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(User).all(),
       [steve], 
-      pick=('name')
+      pick=('id', 'name', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(Keyword).all(),
       [boo],
-      pick=('word')
+      pick=('id', 'word', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(UserKeyword).all(),
@@ -628,16 +661,18 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(UserRev).order_by(User.Revision.rev_created).all(),
       [
-        { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False },
+        { 'id': steve.id, 'name': 'steve',
+          'rev_isdelete': False, 'rev_id': steve.rev_id },
       ],
-      pick=('id', 'name', 'rev_isdelete')
+      pick=('id', 'name', 'rev_isdelete', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
       [
-        { 'id': boo.id, 'word': 'boo', 'rev_isdelete': False },
+        { 'id': boo.id, 'word': 'boo',
+          'rev_isdelete': False, 'rev_id': boo.rev_id },
       ],
-      pick=('id', 'word', 'rev_isdelete')
+      pick=('id', 'word', 'rev_isdelete', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(UserKeywordRev).order_by(UserKeywordRev.rev_created).all(),
@@ -647,6 +682,7 @@ class TestVersioned(DbTestCase):
       ],
       pick=('user_id', 'keyword_id', 'rev_isdelete')
     )
+    # todo: validate rev_id of deleted
 
 
 
@@ -672,12 +708,12 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(User).all(),
       [steve, allan], 
-      pick=('name')
+      pick=('id', 'name', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(Keyword).all(),
       [hoo],
-      pick=('word')
+      pick=('id', 'word', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(UserKeyword).all(),
@@ -690,10 +726,12 @@ class TestVersioned(DbTestCase):
     self.assertSeqEqual(
       sess.query(UserRev).order_by(User.Revision.rev_created).all(),
       [
-        { 'id': steve.id, 'name': 'steve', 'rev_isdelete': False },
-        { 'id': allan.id, 'name': 'allan', 'rev_isdelete': False },
+        { 'id': steve.id, 'name': 'steve',
+          'rev_isdelete': False, 'rev_id': steve.rev_id },
+        { 'id': allan.id, 'name': 'allan',
+          'rev_isdelete': False, 'rev_id': allan.rev_id },
       ],
-      pick=('id', 'name', 'rev_isdelete')
+      pick=('id', 'name', 'rev_isdelete', 'rev_id')
     )
     self.assertSeqEqual(
       sess.query(KeywordRev).order_by(KeywordRev.rev_created).all(),
@@ -704,6 +742,7 @@ class TestVersioned(DbTestCase):
       ],
       pick=('id', 'word', 'rev_isdelete')
     )
+    # todo: validate rev_id of deleted
     self.assertSeqEqual(
       sess.query(UserKeywordRev).order_by(UserKeywordRev.rev_created).all(),
       [
@@ -713,6 +752,7 @@ class TestVersioned(DbTestCase):
       ],
       pick=('user_id', 'keyword_id', 'rev_isdelete')
     )
+    # todo: validate rev_id of deleted
 
 
 
