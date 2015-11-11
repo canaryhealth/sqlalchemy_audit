@@ -67,7 +67,8 @@ class Versioned(object):
     attr.rev_created = time.time()
     attr.rev_isdelete = False
     for k in target.__table__.primary_key:
-      attr[k.name] = getattr(target, k.name)
+      prop = mapper.get_property_by_column(k).key
+      attr[k.name] = getattr(target, prop)
 
     if action == 'delete':
       attr.rev_isdelete = True
@@ -77,7 +78,8 @@ class Versioned(object):
       for c in target.__table__.c:
         # skip primary key and namespaced fields (already assigned)
         if not (c.name.startswith('rev_') or c.primary_key is True):
-          attr[c.name] = getattr(target, c.name)
+          prop = mapper.get_property_by_column(c).key
+          attr[c.name] = getattr(target, prop)
     rev = target.Revision(**attr)
     Versioned.DBSession.add(rev)
 
