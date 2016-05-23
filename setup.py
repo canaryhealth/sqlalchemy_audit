@@ -34,7 +34,7 @@ setup(
   long_description=README,
   classifiers=classifiers,
   platforms=['any'],
-  url='https://github.com/canaryhealth/RobotS2LScreenshot',
+  url='https://github.com/canaryhealth/sqlalchemy_audit',
   license='MIT',
   packages=find_packages(),
   include_package_data=True,
