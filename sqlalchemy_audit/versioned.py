@@ -1,14 +1,8 @@
 # -*- coding: utf-8 -*-
-#------------------------------------------------------------------------------
-# file: $Id$
-# auth: Steve Yeung <steve@canary.md>
-# date: 2015/06/04
-# copy: (C) Copyright 2014-EOT Canary Health, Inc., All Rights Reserved.
-#------------------------------------------------------------------------------
-import aadict
 import time
 import uuid
 
+import aadict
 import sqlalchemy as sa
 
 class Versioned(object):
@@ -160,7 +154,3 @@ def raiseDeleteForbidden(mapper, connection, target):
 class UpdateForbidden(Exception): pass
 def raiseUpdateForbidden(mapper, connection, target):
   raise UpdateForbidden('%r cannot be updated' % (target,))
-
-#------------------------------------------------------------------------------
-# end of $Id$
-#------------------------------------------------------------------------------

@@ -10,10 +10,12 @@ with open(os.path.join(here, 'README.rst')) as f:
 
 requires = [
   'sqlalchemy >= 0.8.2',
+  'aadict >= 0.2.2',
   ]
 
 test_requires = [
   'nose >= 1.3.0',
+  'morph >= 0.1.2',
   ]
 
 classifiers = [

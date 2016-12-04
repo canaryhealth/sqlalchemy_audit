@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-import morph
 import time
 import unittest
 import uuid
 
+import morph
 import sqlalchemy as sa
+from sqlalchemy.ext import associationproxy
 from sqlalchemy.ext.declarative.base import _declarative_constructor as SaInit
 
 from ..versioned import Versioned

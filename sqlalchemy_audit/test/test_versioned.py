@@ -5,7 +5,6 @@ import unittest
 import uuid
 
 import sqlalchemy as sa
-from canary.model.util import RestrictingForeignKey
 
 from . import DbTestCase
 from ..versioned import Versioned, DeleteForbidden, UpdateForbidden
@@ -19,7 +18,7 @@ class TestVersioned(DbTestCase):
       id = sa.Column(sa.String, primary_key=True)
       created = sa.Column(sa.Float, nullable=False)
       name = sa.Column(sa.String, default='a', nullable=False)
-      b_id = sa.Column(sa.String, RestrictingForeignKey('b.id'), nullable=False)
+      b_id = sa.Column(sa.String, sa.ForeignKey('b.id', onupdate='RESTRICT', ondelete='RESTRICT'), nullable=False)
 
     class B(self.Base):
       __tablename__ = 'b'
